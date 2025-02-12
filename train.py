@@ -47,15 +47,12 @@ def process_mesh(mesh, plane_cache, normalize_plane):
     cmesh = coacd_modified.Mesh(mesh.vertices, mesh.faces)
     result = coacd_modified.normalize(cmesh)
 
-    mesh_hash = str(hash((mesh.vertices, mesh.faces)))
+    mesh_hash = str(hash((mesh.vertices, mesh.faces))) #Pray that it doesn't collide (The chance of this is extremely low)
     if mesh_hash in plane_cache:
         plane = plane_cache[mesh_hash]
     else:
-        sys.stdout = open(os.devnull, 'w')
-        sys.stderr = open(os.devnull, 'w')
+
         plane = coacd_modified.best_cutting_plane(cmesh, merge=False)
-        sys.stdout = sys.__stdout__
-        sys.stderr = sys.__stderr__
         plane = (plane.a, plane.b, plane.c, plane.d)
         plane_cache[mesh_hash] = plane
 
