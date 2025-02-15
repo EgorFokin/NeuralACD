@@ -20,6 +20,9 @@ from pathlib import Path
 from tqdm import tqdm
 from utils.ShapeNetDataLoader import PartNormalDataset
 from utils.BaseUtils import *
+import threading
+
+file_lock = threading.Lock()
 
 
 def process_mesh(mesh, plane_cache):
@@ -42,8 +45,9 @@ def preprocess_data(batch):
         futures = [executor.submit(process_mesh, mesh, plane_cache) for mesh in batch]
     wait(futures)
 
-    with open("plane_cache.json", "w") as plane_cache_f:
-        json.dump(plane_cache, plane_cache_f)
+    with file_lock:
+        with open("plane_cache.json", "w") as plane_cache_f:
+            json.dump(plane_cache, plane_cache_f)
 
 
 if __name__ == "__main__":
