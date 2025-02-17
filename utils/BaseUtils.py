@@ -32,15 +32,15 @@ def apply_rotation_to_plane(a,b,c,d,rotation):
     return rotated_normal[0], -rotated_normal[2], rotated_normal[1], d_new #with axis swap
 
 
-def load_shapenet(debug=False, batch_size=1):
+def load_shapenet(debug=False, batch_size=1, tmp_folder="tmp", data_folder="data/ShapeNetCore"):
     print("Loading ShapeNet dataset...")
 
     batch = []
     
-    if debug and os.path.isdir("tmp"):
+    if debug and os.path.isdir(tmp_folder):
         #reuse already extracted data
         print("Using existing data in tmp folder")
-        for root,dirs,files in os.walk("tmp"):
+        for root,dirs,files in os.walk(tmp_folder):
             for file in files:
                 if file.endswith(".obj"):
                     obj = trimesh.load(os.path.join(root,file))
@@ -60,14 +60,14 @@ def load_shapenet(debug=False, batch_size=1):
                         batch = []
 
 
-    for compressed in os.listdir(os.path.join("data","ShapeNetCore")):
+    for compressed in os.listdir(data_folder):
         if compressed.endswith(".zip"):
             empty_tmp()
-            with zipfile.ZipFile(os.path.join("data","ShapeNetCore",compressed), 'r') as zip_ref:
+            with zipfile.ZipFile(os.path.join(data_folder,compressed), 'r') as zip_ref:
                 print(f"Extracting {compressed}...")
-                zip_ref.extractall("tmp")
+                zip_ref.extractall(tmp_folder)
                 print(f"Extracted {compressed}")
-                for root,dirs,files in os.walk("tmp"):
+                for root,dirs,files in os.walk(tmp_folder):
                     for file in files:
                         if file.endswith(".obj"):
                             obj = trimesh.load(os.path.join(root,file))
@@ -85,11 +85,11 @@ def load_shapenet(debug=False, batch_size=1):
                             if len(batch) == batch_size:
                                 yield batch
                                 batch = []
-    empty_tmp()
+    empty_tmp(tmp_folder)
 
 
 
-def empty_tmp():
+def empty_tmp(tmp_folder="tmp"):
     print("Emptying tmp folder...")
-    shutil.rmtree("tmp", ignore_errors=True)
+    shutil.rmtree(tmp_folder, ignore_errors=True)
             

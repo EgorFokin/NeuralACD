@@ -49,12 +49,25 @@ def preprocess_data(batch):
         with open("plane_cache.json", "w") as plane_cache_f:
             json.dump(plane_cache, plane_cache_f)
 
+TOTAL_MESHES = 52000
 
 if __name__ == "__main__":
     i = 0
     coacd_modified.set_log_level("off")
     batch_size = 16
-    for batch in load_shapenet(debug=True, batch_size=batch_size):
+    start_time = datetime.datetime.now()
+    time_spent = datetime.timedelta()
+    ten_prev = []
+    for batch in load_shapenet(debug=False, batch_size=batch_size, data_folder="data/ShapenetRedistributed"):
         preprocess_data(batch)
         i+=1
-        print(f"Processed {i * batch_size} meshes")
+        delta = datetime.datetime.now() - start_time
+        #print remaining time
+        ten_prev.append(delta)
+        time_spent += delta
+        if i>10:
+            print(f"Mesh {i*batch_size}/{TOTAL_MESHES}; {str(time_spent).split('.')[0]}/{str(sum(ten_prev, datetime.timedelta())/10*(TOTAL_MESHES/(batch_size))).split('.')[0]}")
+            ten_prev.pop(0)
+        else:
+            print(f"Mesh {i*batch_size}/{TOTAL_MESHES}; {str(time_spent).split('.')[0]}/{str(delta*(TOTAL_MESHES/(batch_size))).split('.')[0]}")
+        start_time = datetime.datetime.now()
