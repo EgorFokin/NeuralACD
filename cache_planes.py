@@ -2,23 +2,18 @@
 
 import argparse
 import os
-import torch
 import datetime
 import logging
 import sys
 import importlib
 import shutil
-import provider
 import numpy as np
 import coacd_modified
-import pyntcloud
 import json
 
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 
 from pathlib import Path
-from tqdm import tqdm
-from utils.ShapeNetDataLoader import PartNormalDataset
 from utils.BaseUtils import *
 import threading
 
@@ -54,7 +49,7 @@ TOTAL_MESHES = 52000
 if __name__ == "__main__":
     i = 0
     coacd_modified.set_log_level("off")
-    batch_size = 16
+    batch_size = 30
     start_time = datetime.datetime.now()
     time_spent = datetime.timedelta()
     ten_prev = []
