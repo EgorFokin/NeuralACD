@@ -14,6 +14,9 @@ from utils.BaseUtils import *
 import threading
 
 
+dict_lock = threading.Lock()
+
+
 
 def process_mesh(mesh, plane_cache):
 
@@ -26,7 +29,8 @@ def process_mesh(mesh, plane_cache):
 
         planes = [(plane.a, plane.b, plane.c, plane.d, plane.score) for plane in planes]
         print(str(hash((mesh.vertices, mesh.faces))),planes)
-        plane_cache[mesh_hash] = planes
+        with dict_lock:
+            plane_cache[mesh_hash] = planes
 
 def future_done(future):
     global threads_running, meshes_processed
@@ -69,7 +73,8 @@ if __name__ == "__main__":
         
             if meshes_processed % 50 == 0:
                 with open("plane_cache.json", "w") as plane_cache_f:
-                    json.dump(plane_cache, plane_cache_f)
+                    with dict_lock:
+                        json.dump(plane_cache, plane_cache_f)
 
     wait(futures)
     with open("plane_cache.json", "w") as plane_cache_f:
