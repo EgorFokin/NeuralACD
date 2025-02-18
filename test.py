@@ -7,7 +7,7 @@ import json
 import datetime
 import time
 
-# if __name__ == "__main__":
+if __name__ == "__main__":
 
 #     # with open("plane_cache.json", "r") as plane_cache_f:
 #     #     plane_cache = json.load(plane_cache_f)
@@ -67,43 +67,71 @@ import time
 #         if len(value) < 5 or 'e' in str(value):
 #             c+=1
 
-#     mesh = trimesh.load("tmp/-11911506453957110.obj")
-#     mesh = trimesh.util.concatenate(
-#                                 tuple(trimesh.Trimesh(vertices=g.vertices, faces=g.faces)
-#                                     for g in mesh.geometry.values()))
-#     print(p1[str(hash((mesh.vertices, mesh.faces)))])
+    with open("plane_cache.json", "r") as plane_cache_f:
+        plane_cache = json.load(plane_cache_f)
 
-#     cmesh = coacd_modified.Mesh(mesh.vertices, mesh.faces)
-#     res = coacd_modified.best_cutting_planes(cmesh, num_planes=5)
-#     print([(plane.a, plane.b, plane.c, plane.d, plane.score) for plane in res])
+        #iterate over files in tmp
+        for root,dirs,files in os.walk("tmp2"):
+            for file in files:
+                if file.endswith(".obj"):
+                    obj = trimesh.load(os.path.join(root,file))
+                    #check if the obj contains a scene instead of a single mesh
+                    if isinstance(obj,trimesh.Scene):
+                        if len(obj.geometry) == 0:
+                            continue
+                        else:
+                            mesh = trimesh.util.concatenate(
+                                tuple(trimesh.Trimesh(vertices=g.vertices, faces=g.faces)
+                                    for g in obj.geometry.values()))
+                    else:
+                        mesh = obj
+                    mesh_hash = str(hash((mesh.vertices, mesh.faces)))
+                    cmesh = coacd_modified.Mesh(mesh.vertices, mesh.faces)
+                    res = coacd_modified.best_cutting_planes(cmesh, num_planes=5)
+                    #compare if the plane in cache is the same as the one calculated
+                    planes = [(plane.a, plane.b, plane.c, plane.d, plane.score) for plane in res]
+                    cache_planes = plane_cache[mesh_hash]
+                    for i in range(5):
+                        if planes[i][0] != cache_planes[i][0] or planes[i][1] != cache_planes[i][1] or planes[i][2] != cache_planes[i][2] or planes[i][3] != cache_planes[i][3]:
+                            print("Mismatch")
+                            print(planes[i])
+                            print(cache_planes[i])
+                            print(mesh_hash)
+                            exit()
+                    
 
-#     res = coacd_modified.normalize(cmesh)
+        mesh = trimesh.load("tmp2/-1241765121852705049.obj")
+        #mesh = trimesh.load("tmp/-11911506453957110.obj")
+        mesh = trimesh.util.concatenate(
+                                    tuple(trimesh.Trimesh(vertices=g.vertices, faces=g.faces)
+                                        for g in mesh.geometry.values()))
+        print(plane_cache[str(hash((mesh.vertices, mesh.faces)))])
 
-#     mesh = trimesh.Trimesh(res.vertices, res.indices)
+        cmesh = coacd_modified.Mesh(mesh.vertices, mesh.faces)
 
-#     mesh.export("normalized.obj")
+        res = coacd_modified.normalize(cmesh)
 
+        mesh = trimesh.Trimesh(res.vertices, res.indices)
 
-TOTAL_MESHES = 52000
+        mesh.export("normalized.obj")
 
-if __name__ == "__main__":
-    i = 0
-    batch_size = 16
-    start_time = datetime.datetime.now()
-    time_spent = datetime.timedelta()
-    ten_prev = []
-    for i in range(100000):
-        i+=1
-        time.sleep(1)
-        delta = datetime.datetime.now() - start_time
+        res = coacd_modified.best_cutting_planes(cmesh, num_planes=5)
+
+        planes = [(plane.a, plane.b, plane.c, plane.d, plane.score) for plane in res]
+        print(planes)
 
 
-        ten_prev.append(delta)
-        time_spent += delta
-        if i>10:
-            print(f"mesh{i*batch_size}/{TOTAL_MESHES}; {str(time_spent).split('.')[0]}/{str(sum(ten_prev, datetime.timedelta())/10*(TOTAL_MESHES/(batch_size))).split('.')[0]}")
-            ten_prev.pop(0)
-        else:
-            print(f"mesh{i*batch_size}/{TOTAL_MESHES}; {str(time_spent).split('.')[0]}/{str(delta*(TOTAL_MESHES/(batch_size))).split('.')[0]}")
+        #res = coacd_modified.run_coacd(cmesh)
 
-        start_time = datetime.datetime.now()
+        # mesh_parts = []
+
+        # for vs, fs in res:
+        #     mesh_parts.append(trimesh.Trimesh(vs, fs))
+
+        # scene = trimesh.Scene()
+        # np.random.seed(0)
+        # for p in mesh_parts:
+        #     p.visual.vertex_colors[:, :3] = (np.random.rand(3) * 255).astype(np.uint8)
+        #     scene.add_geometry(p)
+        # scene.export("decomposed.obj")
+

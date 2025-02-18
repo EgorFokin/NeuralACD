@@ -32,10 +32,9 @@ def apply_rotation_to_plane(a,b,c,d,rotation):
     return rotated_normal[0], -rotated_normal[2], rotated_normal[1], d_new #with axis swap
 
 
-def load_shapenet(debug=False, batch_size=1, tmp_folder="tmp", data_folder="data/ShapeNetCore"):
+def load_shapenet(debug=False, tmp_folder="tmp", data_folder="data/ShapeNetCore"):
     print("Loading ShapeNet dataset...")
 
-    batch = []
     
     if debug and os.path.isdir(tmp_folder):
         #reuse already extracted data
@@ -54,10 +53,7 @@ def load_shapenet(debug=False, batch_size=1, tmp_folder="tmp", data_folder="data
                                     for g in obj.geometry.values()))
                     else:
                         mesh = obj
-                    batch.append(mesh)
-                    if len(batch) == batch_size:
-                        yield batch
-                        batch = []
+                    yield mesh
 
 
     for compressed in os.listdir(data_folder):
@@ -81,10 +77,7 @@ def load_shapenet(debug=False, batch_size=1, tmp_folder="tmp", data_folder="data
                                             for g in obj.geometry.values()))
                             else:
                                 mesh = obj
-                            batch.append(mesh)
-                            if len(batch) == batch_size:
-                                yield batch
-                                batch = []
+                            yield mesh
     empty_tmp(tmp_folder)
 
 

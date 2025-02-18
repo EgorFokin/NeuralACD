@@ -1,24 +1,55 @@
 import coacd_modified
 import trimesh
 
-if __name__ == "__main__":
-    mesh = trimesh.load("mesh.obj")
-    cmesh = coacd_modified.Mesh(mesh.vertices, mesh.faces)
-    parts = []
-    out = coacd_modified.run_coacd(cmesh)
-    for vs, fs in out:
-        parts.append(trimesh.Trimesh(vs, fs))
-    scene = trimesh.Scene()
-    for p in parts:
-        scene.add_geometry(p)
-    scene.export("decomposed.obj")
+# Some of the code is taken from https://github.com/yanx27/Pointnet_Pointnet2_pytorch/tree/master CREDIT: Benny
 
-    planes = coacd_modified.best_cutting_planes(cmesh, num_planes=5)
-    print([(plane.a, plane.b, plane.c, plane.d, plane.score) for plane in planes])
+import argparse
+import os
+import torch
+import datetime
+import logging
+import sys
+import importlib
+import shutil
+import provider
+import numpy as np
+import coacd_modified
+import pyntcloud
+import json
 
-    # cmesh = coacd_modified2.Mesh(mesh.vertices, mesh.faces)
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 
-    # plane = coacd_modified2.best_cutting_plane(cmesh)
+from pathlib import Path
+from tqdm import tqdm
+from utils.ShapeNetDataLoader import PartNormalDataset
+from utils.BaseUtils import *
+import threading
 
-    # print(plane.a, plane.b, plane.c, plane.d)
-    
+data_folder = "data/ShapeNetRedistributed"
+
+tmp_folder = "tmp2"
+
+for compressed in os.listdir(data_folder):
+        if compressed.endswith(".zip"):
+            with zipfile.ZipFile(os.path.join(data_folder,compressed), 'r') as zip_ref:
+                print(f"Extracting {compressed}...")
+                zip_ref.extractall(tmp_folder)
+                print(f"Extracted {compressed}")
+                for root,dirs,files in os.walk(tmp_folder):
+                    for file in files:
+                        if file.endswith(".obj"):
+                            obj = trimesh.load(os.path.join(root,file))
+                            #check if the obj contains a scene instead of a single mesh
+                            if isinstance(obj,trimesh.Scene):
+                                if len(obj.geometry) == 0:
+                                    continue
+                                else:
+                                    mesh = trimesh.util.concatenate(
+                                        tuple(trimesh.Trimesh(vertices=g.vertices, faces=g.faces)
+                                            for g in obj.geometry.values()))
+                            else:
+                                mesh = obj
+                            mesh_hash = str(hash((mesh.vertices, mesh.faces)))
+                            if mesh_hash == "-6434849133867754989":
+                                print(root,file)
+                            
