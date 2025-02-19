@@ -38,32 +38,55 @@ DECAY_STEP = 10
 LR_DECAY = 0.7
 EPOCHS = 200
 
+NUM_PLANES = 5
+
 def inplace_relu(m):
     classname = m.__class__.__name__
     if classname.find('ReLU') != -1:
         m.inplace=True
 
-def process_mesh(mesh, plane_cache, normalize_plane):
+def process_mesh(mesh, plane_cache):
     cmesh = coacd_modified.Mesh(mesh.vertices, mesh.faces)
     result = coacd_modified.normalize(cmesh)
 
-    mesh_hash = str(hash((mesh.vertices, mesh.faces))) #Pray that it doesn't collide (The chance of this is extremely low)
+    normalized_mesh = trimesh.Trimesh(result.vertices, result.indices)
+
+    rotation = apply_random_rotation(normalized_mesh)
+
+    mesh_hash = str(hash((mesh.vertices, mesh.faces)))
     if mesh_hash in plane_cache:
         plane = plane_cache[mesh_hash]
     else:
-
-        plane = coacd_modified.best_cutting_plane(cmesh, merge=False)
-        plane = (plane.a, plane.b, plane.c, plane.d)
+        planes = coacd_modified.best_cutting_planes(cmesh,num_planes=NUM_PLANES)
+        planes = [(plane.a, plane.b, plane.c, plane.d) for plane in planes]
+        plane_cache[mesh_hash] = planes
+    
+    try:
+        target = []
+        for plane in planes:
+            a, b, c, d = apply_rotation_to_plane(*plane, rotation)
+            a/=d
+            b/=d
+            c/=d
+            target.append([a, b, c])
+                
+    except:
+        #try again
+        planes = coacd_modified.best_cutting_planes(cmesh, num_planes=NUM_PLANES)
+        planes = [(plane.a, plane.b, plane.c, plane.d) for plane in planes]
         plane_cache[mesh_hash] = plane
 
-    normalized_mesh = trimesh.Trimesh(result.vertices, result.indices)
-    rotation = apply_random_rotation(normalized_mesh)
-    a, b, c, d = apply_rotation_to_plane(*plane, rotation)
-    if normalize_plane:
-        a /= d
-        b /= d
-        c /= d
-        d = 1.0
+        try:
+            target = []
+            for plane in planes:
+                a, b, c, d = apply_rotation_to_plane(*plane, rotation)
+                a/=d
+                b/=d
+                c/=d
+                target.append([a, b, c])
+        except:
+            mesh.export("broken_mesh.obj")
+            return None, None
 
     normalized_mesh.export(os.path.join("tmp", f"{str(hash((mesh.vertices, mesh.faces)))}.ply"), vertex_normal=True)
     pc_mesh = pyntcloud.PyntCloud.from_file(os.path.join("tmp", f"{str(hash((mesh.vertices, mesh.faces)))}.ply"))
@@ -71,21 +94,23 @@ def process_mesh(mesh, plane_cache, normalize_plane):
     os.remove(os.path.join("tmp", f"{str(hash((mesh.vertices, mesh.faces)))}.ply"))
     pc = pc_mesh.get_sample("mesh_random", n=512, normals=True, as_PyntCloud=True)
 
-    return pc.points, [a, b, c, d]
+    return pc.points, target
 
-def preprocess_data(batch, normalize_plane=True):
+def preprocess_data(batch):
     with open("plane_cache.json", "r") as plane_cache_f:
         plane_cache = json.load(plane_cache_f)
 
     points = []
     target = []
 
-    with ThreadPoolExecutor() as executor:
-        futures = [executor.submit(process_mesh, mesh, plane_cache, normalize_plane) for mesh in batch]
-        for future in as_completed(futures):
-            pc_points, tgt = future.result()
-            points.append(pc_points)
-            target.append(tgt)
+    for mesh in batch:
+        points_, planes = process_mesh(mesh, plane_cache)
+        if points_ is not None:
+            points.append(points_)
+            target.append(planes)
+        else:
+            print("Skipping batch due to broken data")
+            return None, None 
 
     points = np.array(points)
     points = torch.Tensor(points)
@@ -137,7 +162,7 @@ def main():
 
     '''MODEL LOADING'''
 
-    num_output = 4
+    num_output = 3
 
     shutil.copy('model/model.py', str(exp_dir))
     shutil.copy('model/pointnet2_utils.py', str(exp_dir))
@@ -235,9 +260,10 @@ def main():
             
             optimizer.zero_grad()
             
-            start_time = datetime.datetime.now()
             points, target = preprocess_data(batch)
-            print("Preprocessing time:", datetime.datetime.now()-start_time)
+
+            if points is None:
+                continue
 
             points = points.transpose(2, 1)
 

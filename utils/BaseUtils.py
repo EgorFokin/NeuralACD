@@ -14,7 +14,7 @@ def apply_random_rotation(mesh):
     return rotation
 
 def apply_rotation_to_plane(a,b,c,d,rotation):
-    normal = np.array([a, c, -b]) #axis swap
+    normal = np.array([a, b, c])
 
 
     rotation = rotation[:3,:3]
@@ -29,7 +29,7 @@ def apply_rotation_to_plane(a,b,c,d,rotation):
 
     d_new = -np.dot(rotated_normal, rotated_point)
 
-    return rotated_normal[0], -rotated_normal[2], rotated_normal[1], d_new #with axis swap
+    return rotated_normal[0], rotated_normal[1], rotated_normal[2], d_new 
 
 
 def load_shapenet(debug=False, tmp_folder="tmp", data_folder="data/ShapeNetCore"):

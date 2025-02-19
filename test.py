@@ -9,18 +9,19 @@ import time
 
 if __name__ == "__main__":
 
-#     # with open("plane_cache.json", "r") as plane_cache_f:
-#     #     plane_cache = json.load(plane_cache_f)
-#     #     for key, value in plane_cache.items():
-#     #         for plane in value:
-#                 # rotation = trimesh.transformations.random_rotation_matrix()
+    c = 0
 
-#                 # try:
-#                 #     rotated_plane = apply_rotation_to_plane(*plane[:4],rotation)
-#                 # except:
-#                 #     print(plane)
-#                 #     exit()
-#                 # print(rotated_plane[0]/rotated_plane[3],rotated_plane[1]/rotated_plane[3],rotated_plane[2]/rotated_plane[3])
+    with open("plane_cache.json", "r") as plane_cache_f:
+        plane_cache = json.load(plane_cache_f)
+        for key, value in plane_cache.items():
+            for plane in value:
+                rotation = trimesh.transformations.random_rotation_matrix()
+
+                try:
+                    rotated_plane = apply_rotation_to_plane(*plane[:4],rotation)
+                except:
+                    print(plane)
+    print(c)
     
 #     # plane_cache = json.load(open("plane_cache.json", "r"))
 
@@ -67,58 +68,58 @@ if __name__ == "__main__":
 #         if len(value) < 5 or 'e' in str(value):
 #             c+=1
 
-    with open("plane_cache.json", "r") as plane_cache_f:
-        plane_cache = json.load(plane_cache_f)
+    # with open("plane_cache.json", "r") as plane_cache_f:
+    #     plane_cache = json.load(plane_cache_f)
 
-        #iterate over files in tmp
-        for root,dirs,files in os.walk("tmp2"):
-            for file in files:
-                if file.endswith(".obj"):
-                    obj = trimesh.load(os.path.join(root,file))
-                    #check if the obj contains a scene instead of a single mesh
-                    if isinstance(obj,trimesh.Scene):
-                        if len(obj.geometry) == 0:
-                            continue
-                        else:
-                            mesh = trimesh.util.concatenate(
-                                tuple(trimesh.Trimesh(vertices=g.vertices, faces=g.faces)
-                                    for g in obj.geometry.values()))
-                    else:
-                        mesh = obj
-                    mesh_hash = str(hash((mesh.vertices, mesh.faces)))
-                    cmesh = coacd_modified.Mesh(mesh.vertices, mesh.faces)
-                    res = coacd_modified.best_cutting_planes(cmesh, num_planes=5)
-                    #compare if the plane in cache is the same as the one calculated
-                    planes = [(plane.a, plane.b, plane.c, plane.d, plane.score) for plane in res]
-                    cache_planes = plane_cache[mesh_hash]
-                    for i in range(5):
-                        if planes[i][0] != cache_planes[i][0] or planes[i][1] != cache_planes[i][1] or planes[i][2] != cache_planes[i][2] or planes[i][3] != cache_planes[i][3]:
-                            print("Mismatch")
-                            print(planes[i])
-                            print(cache_planes[i])
-                            print(mesh_hash)
-                            exit()
+    #     #iterate over files in tmp
+    #     for root,dirs,files in os.walk("tmp2"):
+    #         for file in files:
+    #             if file.endswith(".obj"):
+    #                 obj = trimesh.load(os.path.join(root,file))
+    #                 #check if the obj contains a scene instead of a single mesh
+    #                 if isinstance(obj,trimesh.Scene):
+    #                     if len(obj.geometry) == 0:
+    #                         continue
+    #                     else:
+    #                         mesh = trimesh.util.concatenate(
+    #                             tuple(trimesh.Trimesh(vertices=g.vertices, faces=g.faces)
+    #                                 for g in obj.geometry.values()))
+    #                 else:
+    #                     mesh = obj
+    #                 mesh_hash = str(hash((mesh.vertices, mesh.faces)))
+    #                 cmesh = coacd_modified.Mesh(mesh.vertices, mesh.faces)
+    #                 res = coacd_modified.best_cutting_planes(cmesh, num_planes=5)
+    #                 #compare if the plane in cache is the same as the one calculated
+    #                 planes = [(plane.a, plane.b, plane.c, plane.d, plane.score) for plane in res]
+    #                 cache_planes = plane_cache[mesh_hash]
+    #                 for i in range(5):
+    #                     if planes[i][0] != cache_planes[i][0] or planes[i][1] != cache_planes[i][1] or planes[i][2] != cache_planes[i][2] or planes[i][3] != cache_planes[i][3]:
+    #                         print("Mismatch")
+    #                         print(planes[i])
+    #                         print(cache_planes[i])
+    #                         print(mesh_hash)
+    #                         exit()
                     
 
-        mesh = trimesh.load("tmp2/-1241765121852705049.obj")
-        #mesh = trimesh.load("tmp/-11911506453957110.obj")
-        mesh = trimesh.util.concatenate(
-                                    tuple(trimesh.Trimesh(vertices=g.vertices, faces=g.faces)
-                                        for g in mesh.geometry.values()))
-        print(plane_cache[str(hash((mesh.vertices, mesh.faces)))])
+    #     mesh = trimesh.load("tmp2/-1241765121852705049.obj")
+    #     #mesh = trimesh.load("tmp/-11911506453957110.obj")
+    #     mesh = trimesh.util.concatenate(
+    #                                 tuple(trimesh.Trimesh(vertices=g.vertices, faces=g.faces)
+    #                                     for g in mesh.geometry.values()))
+    #     print(plane_cache[str(hash((mesh.vertices, mesh.faces)))])
 
-        cmesh = coacd_modified.Mesh(mesh.vertices, mesh.faces)
+    #     cmesh = coacd_modified.Mesh(mesh.vertices, mesh.faces)
 
-        res = coacd_modified.normalize(cmesh)
+    #     res = coacd_modified.normalize(cmesh)
 
-        mesh = trimesh.Trimesh(res.vertices, res.indices)
+    #     mesh = trimesh.Trimesh(res.vertices, res.indices)
 
-        mesh.export("normalized.obj")
+    #     mesh.export("normalized.obj")
 
-        res = coacd_modified.best_cutting_planes(cmesh, num_planes=5)
+    #     res = coacd_modified.best_cutting_planes(cmesh, num_planes=5)
 
-        planes = [(plane.a, plane.b, plane.c, plane.d, plane.score) for plane in res]
-        print(planes)
+    #     planes = [(plane.a, plane.b, plane.c, plane.d, plane.score) for plane in res]
+    #     print(planes)
 
 
         #res = coacd_modified.run_coacd(cmesh)

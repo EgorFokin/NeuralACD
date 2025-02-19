@@ -52,8 +52,10 @@ class get_loss(nn.Module):
         super(get_loss, self).__init__()
 
     def forward(self, pred, target, trans_feat):
+        #distance to the closest plane
         loss_fn = nn.MSELoss()
-        total_loss = loss_fn(pred, target)
-
-        return total_loss
+        loss = float("inf")
+        for plane in target:
+            loss = min(loss, loss_fn(pred, plane))
+        return loss
 

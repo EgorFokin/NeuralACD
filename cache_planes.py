@@ -23,7 +23,7 @@ def process_mesh(mesh, plane_cache):
     cmesh = coacd_modified.Mesh(mesh.vertices, mesh.faces)
 
     mesh_hash = str(hash((mesh.vertices, mesh.faces)))
-    if mesh_hash not in plane_cache:
+    if mesh_hash not in plane_cache or "e-3" in str(plane_cache[mesh_hash]):
 
         planes = coacd_modified.best_cutting_planes(cmesh, num_planes=5)
 
