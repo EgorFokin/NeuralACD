@@ -6,22 +6,46 @@ import pyntcloud
 import json
 import datetime
 import time
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 if __name__ == "__main__":
 
     c = 0
+    mx = -float('inf')
+    mn = float('inf')
 
     with open("plane_cache.json", "r") as plane_cache_f:
         plane_cache = json.load(plane_cache_f)
-        for key, value in plane_cache.items():
-            for plane in value:
-                rotation = trimesh.transformations.random_rotation_matrix()
+        print(len(plane_cache))
+    #     for key, value in plane_cache.items():
+    #         for plane in value:
+    #             rotation = trimesh.transformations.random_rotation_matrix()
 
-                try:
-                    rotated_plane = apply_rotation_to_plane(*plane[:4],rotation)
-                except:
-                    print(plane)
-    print(c)
+    #             try:
+    #                 rotated_plane = apply_rotation_to_plane(*plane[:4],rotation)
+    #                 a = rotated_plane[0]/rotated_plane[3]
+    #                 b = rotated_plane[1]/rotated_plane[3]
+    #                 c = rotated_plane[2]/rotated_plane[3]
+
+    #                 mn = min(mn, min(a,b,c))
+    #                 mx = max(mx, max(a,b,c))
+    #                 #print(rotated_plane)
+    #             except:
+    #                 print(plane)
+    #                 del plane_cache[key]
+    #                 break
+    # print(mx,mn)
+
+    # with open("plane_cache.json", "w") as plane_cache_f:
+    #     json.dump(plane_cache, plane_cache_f)
+
+    # loss_fn = nn.MSELoss()
+    # i1 = torch.tensor([1,1,1],dtype=torch.float32)
+    # i2 = torch.tensor([0,0,0],dtype=torch.float32)
+    # loss= loss_fn(i1,i2)
+    # print(loss.item())
     
 #     # plane_cache = json.load(open("plane_cache.json", "r"))
 

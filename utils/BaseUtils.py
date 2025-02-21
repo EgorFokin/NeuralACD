@@ -29,6 +29,10 @@ def apply_rotation_to_plane(a,b,c,d,rotation):
 
     d_new = -np.dot(rotated_normal, rotated_point)
 
+    if rotated_normal[0] < 0: #make the signs of coeffs consistent
+        rotated_normal = -rotated_normal
+        d_new = -d_new
+
     return rotated_normal[0], rotated_normal[1], rotated_normal[2], d_new 
 
 

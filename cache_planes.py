@@ -13,6 +13,8 @@ from pathlib import Path
 from utils.BaseUtils import *
 import threading
 
+os.environ["PYTHONHASHSEED"] = "0"
+
 
 dict_lock = threading.Lock()
 
@@ -57,7 +59,7 @@ if __name__ == "__main__":
         plane_cache = json.load(plane_cache_f)
 
 
-    loader = load_shapenet(debug=False, data_folder="data/ShapenetRedistributed")
+    loader = load_shapenet(debug=False, data_folder="data/ShapenetRedistributed_val")
     executor = ThreadPoolExecutor()
     futures = []
     while True:

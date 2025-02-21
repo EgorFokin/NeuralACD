@@ -1,61 +1,114 @@
 import torch.nn as nn
 import torch.nn.functional as F
 import torch
-from pointnet2_utils import PointNetSetAbstractionMsg, PointNetSetAbstraction
-
+from pointnet2_ops.pointnet2_modules import PointnetFPModule, PointnetSAModule
 
 class get_model(nn.Module):
-    def __init__(self,num_class,normal_channel=True):
+    def __init__(self,num_outputs,normal_channel=True):
         super(get_model, self).__init__()
-        in_channel = 3 if normal_channel else 0
-        self.normal_channel = normal_channel
-        self.sa1 = PointNetSetAbstractionMsg(512, [0.1, 0.2, 0.4], [16, 32, 128], in_channel,[[32, 32, 64], [64, 64, 128], [64, 96, 128]])
-        self.sa2 = PointNetSetAbstractionMsg(128, [0.2, 0.4, 0.8], [32, 64, 128], 320,[[64, 64, 128], [128, 128, 256], [128, 128, 256]])
-        self.sa3 = PointNetSetAbstraction(None, None, None, 640 + 3, [256, 512, 1024], True)
-        self.fc1 = nn.Linear(1024, 512)
-        self.bn1 = nn.BatchNorm1d(512)
-        self.drop1 = nn.Dropout(0.4)
-        self.fc2 = nn.Linear(512, 256)
-        self.bn2 = nn.BatchNorm1d(256)
-        self.drop2 = nn.Dropout(0.5)
-        self.fc3 = nn.Linear(256, num_class)
 
-    def forward(self, xyz):
-        B, _, _ = xyz.shape
-        if self.normal_channel:
-            norm = xyz[:, 3:, :]
-            xyz = xyz[:, :3, :]
-        else:
-            norm = None
+        self.num_outputs = num_outputs
 
+        self.use_xyz = True
 
-        if torch.isnan(xyz).any() or torch.isinf(xyz).any():
-            print("xyz contains NaN or Inf values!", xyz)
+        self._build_model()
 
-        if norm is not None and (torch.isnan(norm).any() or torch.isinf(norm).any()):
-            print("norm contains NaN or Inf values!", norm)
+    def _build_model(self):
+        self.SA_modules = nn.ModuleList()
+        self.SA_modules.append(
+            PointnetSAModule(
+                npoint=512,
+                radius=0.1,
+                nsample=64,
+                mlp=[0, 32, 32, 64],
+                # bn=False,
+                use_xyz=self.use_xyz,
+            )
+        )
 
-        l1_xyz, l1_points = self.sa1(xyz, norm)
-        l2_xyz, l2_points = self.sa2(l1_xyz, l1_points)
-        l3_xyz, l3_points = self.sa3(l2_xyz, l2_points)
-        x = l3_points.view(B, 1024)
-        x = self.drop1(F.relu(self.bn1(self.fc1(x))))
-        x = self.drop2(F.relu(self.bn2(self.fc2(x))))
-        x = self.fc3(x)
+        self.SA_modules.append(
+            PointnetSAModule(
+                npoint=256,
+                radius=0.2,
+                nsample=64,
+                mlp=[64, 64, 64, 128],
+                # bn=False,
+                use_xyz=self.use_xyz,
+            )
+        )
 
+        self.SA_modules.append(
+            PointnetSAModule(
+                npoint=128,
+                radius=0.4,
+                nsample=64,
+                mlp=[128, 128, 128, 256],
+                # bn=False,
+                use_xyz=self.use_xyz,
+            )
+        )
 
-        return x,l3_points
+        self.SA_modules.append(
+            PointnetSAModule(
+                mlp=[256, 256, 512, 1024],
+                # bn=False,
+                use_xyz=self.use_xyz
+            )
+        )
+
+        self.fc_layer = nn.Sequential(
+            nn.Linear(1024, 512),
+            nn.LeakyReLU(True),
+            nn.Linear(512, 256),
+            nn.LeakyReLU(True),
+            nn.Linear(256, self.num_outputs),
+            nn.Tanh()
+        )
+
+    def _break_up_pc(self, pc):
+        xyz = pc[..., 0:3].contiguous()
+        features = pc[..., 3:].transpose(1, 2).contiguous() if pc.size(-1) > 3 else None
+
+        return xyz, features
+
+    def forward(self, pointcloud):
+        r"""
+            Forward pass of the network
+
+            Parameters
+            ----------
+            pointcloud: Variable(torch.cuda.FloatTensor)
+                (B, N, 3 + input_channels) tensor
+                Point cloud to run predicts on
+                Each point in the point-cloud MUST
+                be formated as (x, y, z, features...)
+        """
+        pointcloud = pointcloud.permute(0, 2, 1)
+        xyz, features = self._break_up_pc(pointcloud)
+
+        for module in self.SA_modules:
+            xyz, features = module(xyz, features)
+
+        return self.fc_layer(features.squeeze(-1))
 
 
 class get_loss(nn.Module):
     def __init__(self):
         super(get_loss, self).__init__()
 
-    def forward(self, pred, target, trans_feat):
-        #distance to the closest plane
-        loss_fn = nn.MSELoss()
-        loss = float("inf")
-        for plane in target:
-            loss = min(loss, loss_fn(pred, plane))
-        return loss
+    def forward(self, pred, target):
+            # Normalize predictions and target hyperplanes
+            pred_norm = F.normalize(pred, dim=-1)  # Shape: (B, N)
+            target_norm = F.normalize(target, dim=-1)  # Shape: (B, M, N)
+
+            # Compute cosine similarity (higher is better, so we minimize 1 - cosine similarity)
+            cosine_sim = torch.matmul(pred_norm.unsqueeze(1), target_norm.transpose(-1, -2)).squeeze(1)  # Shape: (B, M)
+
+            # Convert similarity to loss (1 - similarity)
+            loss = 1 - cosine_sim  # Shape: (B, M)
+
+            # Take the minimum loss over the M target planes
+            min_loss, _ = loss.min(dim=1)  # Shape: (B,)
+
+            return min_loss.mean()  # Return mean loss over the batch
 

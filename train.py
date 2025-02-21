@@ -13,12 +13,12 @@ import numpy as np
 import coacd_modified
 import pyntcloud
 import json
+import threading
+import warnings
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from pathlib import Path
 from tqdm import tqdm
-from utils.ShapeNetDataLoader import PartNormalDataset
 from utils.BaseUtils import *
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -27,12 +27,13 @@ sys.path.append(os.path.join(ROOT_DIR, 'model'))
 
 import model
 
+warnings.filterwarnings('ignore')
 
 coacd_modified.set_log_level("off")
 
+os.environ["PYTHONHASHSEED"] = "0"
 
-
-LR = 0.001
+LR = 0.01
 DECAY = 1e-4
 DECAY_STEP = 10
 LR_DECAY = 0.7
@@ -45,6 +46,13 @@ def inplace_relu(m):
     if classname.find('ReLU') != -1:
         m.inplace=True
 
+
+def recalculate_planes(cmesh):
+    planes = coacd_modified.best_cutting_planes(cmesh,num_planes=NUM_PLANES)
+    planes = [(plane.a, plane.b, plane.c, plane.d, plane.score) for plane in planes]
+    return planes
+
+
 def process_mesh(mesh, plane_cache):
     cmesh = coacd_modified.Mesh(mesh.vertices, mesh.faces)
     result = coacd_modified.normalize(cmesh)
@@ -55,44 +63,46 @@ def process_mesh(mesh, plane_cache):
 
     mesh_hash = str(hash((mesh.vertices, mesh.faces)))
     if mesh_hash in plane_cache:
-        plane = plane_cache[mesh_hash]
+        planes = plane_cache[mesh_hash]
     else:
-        planes = coacd_modified.best_cutting_planes(cmesh,num_planes=NUM_PLANES)
-        planes = [(plane.a, plane.b, plane.c, plane.d) for plane in planes]
+        print(f"Mesh {mesh_hash} not found in cache")
+        planes = recalculate_planes(cmesh)
+        plane_cache[mesh_hash] = planes
+
+    if len(planes) != NUM_PLANES:
+        planes = recalculate_planes(cmesh)
         plane_cache[mesh_hash] = planes
     
     try:
         target = []
         for plane in planes:
-            a, b, c, d = apply_rotation_to_plane(*plane, rotation)
-            a/=d
-            b/=d
-            c/=d
-            target.append([a, b, c])
+            a, b, c, d = apply_rotation_to_plane(*plane[:4], rotation)
+            target.append([a, b, c, d])
                 
-    except:
+    except Exception as e:
+        print(e)
         #try again
-        planes = coacd_modified.best_cutting_planes(cmesh, num_planes=NUM_PLANES)
-        planes = [(plane.a, plane.b, plane.c, plane.d) for plane in planes]
-        plane_cache[mesh_hash] = plane
+        planes = recalculate_planes(cmesh)
+        plane_cache[mesh_hash] = planes
 
         try:
             target = []
             for plane in planes:
-                a, b, c, d = apply_rotation_to_plane(*plane, rotation)
-                a/=d
-                b/=d
-                c/=d
-                target.append([a, b, c])
+                a, b, c, d = apply_rotation_to_plane(*plane[:4], rotation)
+                target.append([a, b, c, d])
         except:
             mesh.export("broken_mesh.obj")
             return None, None
+        
+    if len(target) != NUM_PLANES:
+        mesh.export("broken_mesh.obj")
+        return None, None
 
     normalized_mesh.export(os.path.join("tmp", f"{str(hash((mesh.vertices, mesh.faces)))}.ply"), vertex_normal=True)
     pc_mesh = pyntcloud.PyntCloud.from_file(os.path.join("tmp", f"{str(hash((mesh.vertices, mesh.faces)))}.ply"))
 
     os.remove(os.path.join("tmp", f"{str(hash((mesh.vertices, mesh.faces)))}.ply"))
-    pc = pc_mesh.get_sample("mesh_random", n=512, normals=True, as_PyntCloud=True)
+    pc = pc_mesh.get_sample("mesh_random", n=512, normals=False, as_PyntCloud=True)
 
     return pc.points, target
 
@@ -121,14 +131,23 @@ def preprocess_data(batch):
     target = torch.Tensor(target)
     target = target.float().cuda()
 
-    with open("plane_cache.json", "w") as plane_cache_f:
-        json.dump(plane_cache, plane_cache_f)
+    def write_to_cache(plane_cache):
+        with open("plane_cache.json", "w") as plane_cache_f:
+            json.dump(plane_cache, plane_cache_f)
+
+    t = threading.Thread(target=write_to_cache, args=(plane_cache,)) #prevents KeyboardInterrupt during write
+    t.start()
+    t.join()
 
     return points, target
 
 
 
-
+def save_checkpoint(state, is_best, checkpoint, filename='checkpoint.pth'):
+    filepath = os.path.join(checkpoint, filename)
+    torch.save(state, filepath)
+    if is_best:
+        shutil.copyfile(filepath, os.path.join(checkpoint, 'best_model.pth'))
 
 def main():
     def log_string(str):
@@ -162,63 +181,66 @@ def main():
 
     '''MODEL LOADING'''
 
-    num_output = 3
+    num_output = 4
 
     shutil.copy('model/model.py', str(exp_dir))
     shutil.copy('model/pointnet2_utils.py', str(exp_dir))
 
-    classifier = model.get_model(num_output).cuda()
+    predictor = model.get_model(num_output).cuda()
     criterion = model.get_loss().cuda()
-    classifier.apply(inplace_relu)
+    #predictor.apply(inplace_relu)
 
     def weights_init(m):
         classname = m.__class__.__name__
         if classname.find('Conv2d') != -1:
             torch.nn.init.xavier_normal_(m.weight.data)
-            torch.nn.init.constant_(m.bias.data, 0.0)
+            if m.bias is not None:
+                torch.nn.init.constant_(m.bias.data, 0.0)
         elif classname.find('Linear') != -1:
             torch.nn.init.xavier_normal_(m.weight.data)
             torch.nn.init.constant_(m.bias.data, 0.0)
 
-    try:
-        checkpoint = torch.load(str(exp_dir) + '/checkpoints/best_model.pth')
-        start_epoch = 0
-        #start_epoch = checkpoint['epoch']
-        checkpoint_state_dict = checkpoint['model_state_dict']
+    # try:
+    #     checkpoint = torch.load(str(exp_dir) + '/checkpoints/best_model.pth')
+    #     start_epoch = 0
+    #     #start_epoch = checkpoint['epoch']
+    #     checkpoint_state_dict = checkpoint['model_state_dict']
 
-        # remove layers not used in the model
-        del checkpoint_state_dict['fc1.weight']
-        del checkpoint_state_dict['fc1.bias']
-        del checkpoint_state_dict['bn1.weight']
-        del checkpoint_state_dict['bn1.bias']
-        del checkpoint_state_dict['bn1.running_mean']
-        del checkpoint_state_dict['bn1.running_var']
-        del checkpoint_state_dict['bn1.num_batches_tracked']
-        del checkpoint_state_dict['fc2.weight']
-        del checkpoint_state_dict['fc2.bias']
-        del checkpoint_state_dict['bn2.weight']
-        del checkpoint_state_dict['bn2.bias']
-        del checkpoint_state_dict['bn2.running_mean']
-        del checkpoint_state_dict['bn2.running_var']
-        del checkpoint_state_dict['bn2.num_batches_tracked']
-        del checkpoint_state_dict['fc3.weight']
-        del checkpoint_state_dict['fc3.bias']
+    #     # remove layers not used in the model
+    #     del checkpoint_state_dict['fc1.weight']
+    #     del checkpoint_state_dict['fc1.bias']
+    #     del checkpoint_state_dict['bn1.weight']
+    #     del checkpoint_state_dict['bn1.bias']
+    #     del checkpoint_state_dict['bn1.running_mean']
+    #     del checkpoint_state_dict['bn1.running_var']
+    #     del checkpoint_state_dict['bn1.num_batches_tracked']
+    #     del checkpoint_state_dict['fc2.weight']
+    #     del checkpoint_state_dict['fc2.bias']
+    #     del checkpoint_state_dict['bn2.weight']
+    #     del checkpoint_state_dict['bn2.bias']
+    #     del checkpoint_state_dict['bn2.running_mean']
+    #     del checkpoint_state_dict['bn2.running_var']
+    #     del checkpoint_state_dict['bn2.num_batches_tracked']
+    #     del checkpoint_state_dict['fc3.weight']
+    #     del checkpoint_state_dict['fc3.bias']
 
-        classifier.load_state_dict(checkpoint_state_dict, strict=False)
-        log_string('Use pretrain model')
-    except Exception as e:
-        print(e)
-        log_string('No existing model, starting training from scratch...')
-        start_epoch = 0
-        classifier = classifier.apply(weights_init)
+    #     predictor.load_state_dict(checkpoint_state_dict, strict=False)
+    #     log_string('Use pretrain model')
+    # except Exception as e:
+    #     print(e)
+    #     log_string('No existing model, starting training from scratch...')
+    #     start_epoch = 0
+    #     predictor = predictor.apply(weights_init)
+
+    start_epoch = 0
+    #predictor = predictor.apply(weights_init)
 
 
     optimizer = torch.optim.Adam(
-        classifier.parameters(),
+        predictor.parameters(),
         lr=LR,
         betas=(0.9, 0.999),
-        eps=1e-08,
-        weight_decay=DECAY
+        eps=1e-08
     )
 
 
@@ -233,8 +255,9 @@ def main():
 
     print('Using', torch.cuda.get_device_name(torch.cuda.current_device()))
 
+    best_loss = float('inf')
+
     for epoch in range(start_epoch, EPOCHS):
-        mean_correct = []
 
         log_string('Epoch %d (%d/%s):' %
                    (epoch + 1, epoch + 1, EPOCHS))
@@ -249,40 +272,100 @@ def main():
         if momentum < 0.01:
             momentum = 0.01
         print('BN momentum updated to: %f' % momentum)
-        classifier = classifier.apply(
+        predictor = predictor.apply(
             lambda x: bn_momentum_adjust(x, momentum))
-        classifier = classifier.train()
+        predictor = predictor.train()
 
         '''learning one epoch'''
         i = 0
         batch_size = 16
-        for batch in load_shapenet(debug=True, batch_size=batch_size):
+        batch = []
+
+        running_tloss = 0
+
+        for mesh in load_shapenet(debug=True, data_folder="data/ShapenetRedistributed"):
+            batch.append(mesh)
+            if len(batch) != batch_size:
+                continue
+
             
             optimizer.zero_grad()
             
+            start_time = datetime.datetime.now()
             points, target = preprocess_data(batch)
+            print("Preprocessing time:", datetime.datetime.now()-start_time)
 
             if points is None:
+                batch = []
                 continue
 
             points = points.transpose(2, 1)
 
             start_time = datetime.datetime.now()
-            seg_pred, trans_feat = classifier(
+            seg_pred = predictor(
                 points)
             
+            print(target)
             print(seg_pred)
             
-            loss = criterion(seg_pred, target, trans_feat)
+            loss = criterion(seg_pred, target)
             loss.backward()
+            for name, param in model.named_parameters():
+                if param.grad is not None:
+                    print(f"Gradient of {name}: {param.grad.norm()}")
             optimizer.step()
             print("Training time:", datetime.datetime.now()-start_time)
-            print('\nloss:', loss.item())
+            print('Training loss:', running_tloss/(i+1))
+            running_tloss += loss.item()
             i+=1
             print(f"{i*batch_size} meshes processed")
 
-        train_instance_acc = np.mean(mean_correct)
-        log_string('Train accuracy is: %.5f' % train_instance_acc)
+            batch = []
+
+        
+
+        #validation
+        print("Running validation...")
+        predictor = predictor.eval()
+        running_vloss = 0
+        i = 0
+        with torch.no_grad():
+            batch = []
+            for mesh in load_shapenet(debug=False, data_folder="data/ShapenetRedistributed_val"):
+                batch.append(mesh)
+                if len(batch) != batch_size:
+                    continue
+
+                points, target = preprocess_data(batch)
+
+                if points is None:
+                    batch = []
+                    continue
+
+                points = points.transpose(2, 1)
+
+                seg_pred, trans_feat = predictor(
+                    points)
+                
+                loss = criterion(seg_pred,target,trans_feat)
+                running_vloss += loss.item()
+                i+=1
+                print(f"{i*batch_size} val meshes processed")
+                batch = []
+        
+
+        print('Validation loss:', running_vloss/i)
+        best = False
+        if running_vloss < best_loss:
+            best_loss = running_vloss
+            best = True
+
+
+        save_checkpoint({
+            'epoch': epoch + 1,
+            'model_state_dict': predictor.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+        }, best, str(exp_dir) + '/checkpoints/', 'checkpoint.pth')
 
 
 if __name__ == '__main__':
