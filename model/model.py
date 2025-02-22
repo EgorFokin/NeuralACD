@@ -97,18 +97,37 @@ class get_loss(nn.Module):
         super(get_loss, self).__init__()
 
     def forward(self, pred, target):
-            # Normalize predictions and target hyperplanes
-            pred_norm = F.normalize(pred, dim=-1)  # Shape: (B, N)
-            target_norm = F.normalize(target, dim=-1)  # Shape: (B, M, N)
+            # # Normalize predictions and target hyperplanes
+            # pred_norm = F.normalize(pred, dim=-1)  # Shape: (B, N)
+            # target_norm = F.normalize(target, dim=-1)  # Shape: (B, M, N)
 
-            # Compute cosine similarity (higher is better, so we minimize 1 - cosine similarity)
-            cosine_sim = torch.matmul(pred_norm.unsqueeze(1), target_norm.transpose(-1, -2)).squeeze(1)  # Shape: (B, M)
+            # # Compute cosine similarity (higher is better, so we minimize 1 - cosine similarity)
+            # cosine_sim = torch.matmul(pred_norm.unsqueeze(1), target_norm.transpose(-1, -2)).squeeze(1)  # Shape: (B, M)
 
-            # Convert similarity to loss (1 - similarity)
-            loss = 1 - cosine_sim  # Shape: (B, M)
+            # # Convert similarity to loss (1 - similarity)
+            # loss = 1 - cosine_sim  # Shape: (B, M)
 
-            # Take the minimum loss over the M target planes
+            # # Take the minimum loss over the M target planes
+            # min_loss, _ = loss.min(dim=1)  # Shape: (B,)
+
+            # return min_loss.mean()  # Return mean loss over the batch
+
+
+
+            target_norm = F.normalize(target, dim=-1)
+            #target_norm[..., 3] = target_norm[..., 3] * 2 - 1 # d is always positive, so we need to convert it to the range [-1, 1]
+
+
+            #distance to the closest plane
+            loss_fn = nn.MSELoss(reduction='none')  # Compute element-wise MSE
+
+            # Compute MSE loss for all target planes
+            loss = loss_fn(pred.unsqueeze(1), target_norm)  # Shape: (B, M, 4)
+
+            # Sum over the last dimension (MSE is applied to 4D vectors)
+            loss = loss.mean(dim=-1)  # Shape: (B, M)
+
+            # Take the minimum loss over the M target planes for each batch
             min_loss, _ = loss.min(dim=1)  # Shape: (B,)
 
             return min_loss.mean()  # Return mean loss over the batch
-
