@@ -1,46 +1,64 @@
-
 import coacd_modified
-import pyntcloud
+import open3d as o3d
 import json
-import multiprocessing
 import threading
-import trimesh
 import torch
+import numpy as np
+import queue
 
 from utils.BaseUtils import *
 
 coacd_modified.set_log_level("off")
 
-
-BUFFER_SIZE = 64
-
+BUFFER_SIZE = 4
 WORKERS = 6
-
 NUM_PLANES = 5
-
 NUM_POINTS = 512
 
+def apply_random_rotation(mesh):
+    rotation = o3d.geometry.get_rotation_matrix_from_xyz(np.random.rand(3) * 2 * np.pi)
+    mesh.rotate(rotation, center=(0, 0, 0))
+    return rotation
+
+def apply_rotation_to_plane(a,b,c,d,rotation):
+    normal = np.array([a, b, c])
+
+    rotation = rotation[:3,:3]
+    
+    rotated_normal = rotation @ normal
+
+    if np.linalg.norm(normal) == 0:
+        raise ValueError("Invalid plane normal (0,0,0).")
+
+    point_on_plane = -d * normal / np.linalg.norm(normal) ** 2 
+    rotated_point = rotation @ point_on_plane 
+
+    d_new = -np.dot(rotated_normal, rotated_point)
+
+    if d_new < 0: #make the signs of coeffs consistent
+        rotated_normal = -rotated_normal
+        d_new = -d_new
+
+    return rotated_normal[0], rotated_normal[1], rotated_normal[2], d_new 
 
 def recalculate_planes(cmesh):
-    planes = coacd_modified.best_cutting_planes(cmesh,num_planes=NUM_PLANES)
+    planes = coacd_modified.best_cutting_planes(cmesh, num_planes=NUM_PLANES)
     planes = [(plane.a, plane.b, plane.c, plane.d, plane.score) for plane in planes]
     return planes
 
-
-def process_mesh(mesh, plane_cache):
+def process_mesh(mesh_hash, mesh, plane_cache):
     cache_updated = False
 
-    cmesh = coacd_modified.Mesh(mesh.vertices, mesh.faces)
+    cmesh = coacd_modified.Mesh(np.asarray(mesh.vertices), np.asarray(mesh.triangles))
     result = coacd_modified.normalize(cmesh)
 
-    normalized_mesh = trimesh.Trimesh(result.vertices, result.indices)
-
-    rotation = apply_random_rotation(normalized_mesh)
-
-    mesh_hash = str(hash((mesh.vertices, mesh.faces)))
+    normalized_mesh = o3d.geometry.TriangleMesh()
+    normalized_mesh.vertices = o3d.utility.Vector3dVector(result.vertices)
+    normalized_mesh.triangles = o3d.utility.Vector3iVector(result.indices)
     
-
-
+    
+    rotation = apply_random_rotation(normalized_mesh)
+    
     if mesh_hash in plane_cache:
         planes = plane_cache[mesh_hash]
     else:
@@ -59,155 +77,79 @@ def process_mesh(mesh, plane_cache):
         for plane in planes:
             a, b, c, d = apply_rotation_to_plane(*plane[:4], rotation)
             target.append([a, b, c, d])
-                
     except Exception as e:
         print(e)
-        #try again
         planes = recalculate_planes(cmesh)
         plane_cache[mesh_hash] = planes
         cache_updated = True
-
+        
         try:
             target = []
             for plane in planes:
                 a, b, c, d = apply_rotation_to_plane(*plane[:4], rotation)
                 target.append([a, b, c, d])
         except:
-            mesh.export("broken_mesh.obj")
+            o3d.io.write_triangle_mesh("broken_mesh.obj", mesh)
             return None, None, None
-        
-    if len(target) != NUM_PLANES:
-        mesh.export("broken_mesh.obj")
-        return None, None, None
-
-
     
-    normalized_mesh.export(os.path.join("tmp", f"{str(hash((mesh.vertices, mesh.faces)))}.ply"), vertex_normal=True)
-    pc_mesh = pyntcloud.PyntCloud.from_file(os.path.join("tmp", f"{str(hash((mesh.vertices, mesh.faces)))}.ply"))
+    if len(target) != NUM_PLANES:
+        o3d.io.write_triangle_mesh("broken_mesh.obj", mesh)
+        return None, None, None
+    try:
+        pcd = normalized_mesh.sample_points_poisson_disk(number_of_points=NUM_POINTS, init_factor=2)
+    except:
+        o3d.io.write_triangle_mesh("broken_mesh.obj", mesh)
+        return None, None, None
+    pc_points = np.asarray(pcd.points)
+    
+    del normalized_mesh, pcd, mesh
+    return pc_points, target, cache_updated
 
-    os.remove(os.path.join("tmp", f"{str(hash((mesh.vertices, mesh.faces)))}.ply"))
-    pc = pc_mesh.get_sample("mesh_random", n=NUM_POINTS, normals=False, as_PyntCloud=True)
-
-
-
-    return pc.points, target, cache_updated
-
-
-
-def preprocess_data(loader, plane_cache,batch_size=16):
-
+def preprocess_data(loader, plane_cache, batch_size=16):
     batch_queue = queue.Queue(maxsize=BUFFER_SIZE)
-
+    
     def preprocessor():
-        cur_batch = ([],[])
-
+        cur_batch = ([], [])
         cache_updated = False
-
-        for mesh in loader:
-            
-            points_, planes, updated = process_mesh(mesh, plane_cache)
+        
+        for mesh_hash,mesh in loader:
+            points_, planes, updated = process_mesh(mesh_hash,mesh, plane_cache)
             cache_updated = cache_updated or updated
+            
             if points_ is not None:
                 cur_batch[0].append(points_)
                 cur_batch[1].append(planes)
             else:
                 print("Skipping broken data")
-                continue 
+                continue
             
             if len(cur_batch[0]) == batch_size:
-
-                points = np.array(cur_batch[0])
-                points = torch.Tensor(points)
-                points = torch.nan_to_num(points, nan=0.0, posinf=0.0, neginf=0.0)
-                points = points.float().cuda()
-
-                target = np.array(cur_batch[1])
-                target = torch.Tensor(target)
-                target = target.float().cuda()
-
-                def write_to_cache(plane_cache):
-                    with open("plane_cache.json", "w") as plane_cache_f:
-                        json.dump(plane_cache, plane_cache_f)
-
+                points = torch.tensor(np.array(cur_batch[0]), dtype=torch.float32).cuda()
+                target = torch.tensor(np.array(cur_batch[1]), dtype=torch.float32).cuda()
+                
                 if cache_updated:
-                    t = threading.Thread(target=write_to_cache, args=(plane_cache,)) #prevents KeyboardInterrupt during write
-
+                    def write_to_cache():
+                        with open("plane_cache.json", "w") as plane_cache_f:
+                            json.dump(plane_cache, plane_cache_f)
+                    
+                    t = threading.Thread(target=write_to_cache)
                     t.start()
                     t.join()
-                cache_updated = False
-                cur_batch = ([],[])
+                    cache_updated = False
+                
+                cur_batch = ([], [])
 
                 batch_queue.put((points, target))
-
+        
         batch_queue.put(None)
-
+    
     thread = threading.Thread(target=preprocessor, daemon=True)
     thread.start()
-
+    
     while True:
         batch = batch_queue.get()
         if batch is None:
             break
         yield batch
 
-
-# def worker_manager(loader, plane_cache,processed_queue):
-#     executor = ProcessPoolExecutor()
-#     futures = []
-#     for _ in range(WORKERS):
-#         mesh = next(loader, None)
-#         if mesh is None:
-#             processed_queue.put(None)
-#             return
-#         future = executor.submit(process_mesh, mesh, plane_cache)
-#         futures.append(future)
     
-#     while True:
-#         for future in futures:
-#             if future.done():
-#                 points, target, updated = future.result()
-#                 processed_queue.put((points, target))
-#                 if updated:
-#                     with open("plane_cache.json", "w") as plane_cache_f:
-#                         json.dump(plane_cache, plane_cache_f)
-#                 futures.remove(future)
-
-#                 mesh = next(loader, None)
-#                 if mesh is None:
-#                     processed_queue.put(None)
-#                     return
-#                 new_future = executor.submit(process_mesh, mesh, plane_cache)
-#                 futures.append(new_future)
-#                 break
-#         if len(futures) == 0:
-#             return
-
-
-# def preprocess_data(loader, plane_cache,batch_size=16):
-
-#     processed_queue = queue.Queue(maxsize=BUFFER_SIZE)
-
-#     worker_manager_thread = threading.Thread(target=worker_manager, args=(loader, plane_cache,processed_queue))
-#     worker_manager_thread.start()
-
-#     while True:
-#         batch = ([], [])
-
-#         for _ in range(batch_size):
-#             processed = processed_queue.get()
-#             if processed is None:
-#                 return
-#             batch[0].append(processed[0])
-#             batch[1].append(processed[1])
-        
-
-#         points = np.array(batch[0])
-#         points = torch.Tensor(points)
-#         points = torch.nan_to_num(points, nan=0.0, posinf=0.0, neginf=0.0)
-#         points = points.float().cuda()
-
-#         target = np.array(batch[1])
-#         target = torch.Tensor(target)
-#         target = target.float().cuda()
-
-#         yield (points, target)

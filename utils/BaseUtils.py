@@ -1,49 +1,27 @@
-import trimesh
 import os
 import zipfile
 import shutil
-import numpy as np
-import queue
-import threading
-import datetime
-import time
+import sys
+import torch
+
+import open3d as o3d
+
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-def apply_random_rotation(mesh):
-    rotation = trimesh.transformations.random_rotation_matrix()
 
 
-    mesh.apply_transform(rotation)
-    return rotation
-
-def apply_rotation_to_plane(a,b,c,d,rotation):
-    normal = np.array([a, b, c])
-
-
-    rotation = rotation[:3,:3]
-    
-    rotated_normal = rotation @ normal
-
-    if np.linalg.norm(normal) == 0:
-        raise ValueError("Invalid plane normal (0,0,0).")
-
-    point_on_plane = -d * normal / np.linalg.norm(normal) ** 2 
-    rotated_point = rotation @ point_on_plane 
-
-    d_new = -np.dot(rotated_normal, rotated_point)
-
-    if d_new < 0: #make the signs of coeffs consistent
-        rotated_normal = -rotated_normal
-        d_new = -d_new
-
-    return rotated_normal[0], rotated_normal[1], rotated_normal[2], d_new 
-
-
-BUFFER_SIZE = 64
 
 def load_shapenet(debug=False, tmp_folder="tmp", data_folder="data/ShapeNetCore"):
     print("Loading ShapeNet dataset...")
+
+    if debug and os.path.isdir(tmp_folder):
+        for root,dirs,files in os.walk(tmp_folder):
+            for file in files:
+                if file.endswith(".obj"):
+                    mesh_hash = ''.join(file.split('.')[:-1])
+                    mesh = o3d.io.read_triangle_mesh(os.path.join(root,file))
+                    yield mesh_hash,mesh
 
 
     for compressed in os.listdir(data_folder):
@@ -56,19 +34,12 @@ def load_shapenet(debug=False, tmp_folder="tmp", data_folder="data/ShapeNetCore"
                 for root,dirs,files in os.walk(tmp_folder):
                     for file in files:
                         if file.endswith(".obj"):
-                            obj = trimesh.load(os.path.join(root,file))
-                            #check if the obj contains a scene instead of a single mesh
-                            if isinstance(obj,trimesh.Scene):
-                                if len(obj.geometry) == 0:
-                                    continue
-                                else:
-                                    mesh = trimesh.util.concatenate(
-                                        tuple(trimesh.Trimesh(vertices=g.vertices, faces=g.faces)
-                                            for g in obj.geometry.values()))
-                            else:
-                                mesh = obj
-                            yield mesh
+                            mesh_hash = ''.join(file.split('.')[:-1])
+                            mesh = o3d.io.read_triangle_mesh(os.path.join(root,file))
+                            yield mesh_hash,mesh
     empty_tmp(tmp_folder)
+
+
 
 # def load_mesh(file):
 #     obj = trimesh.load(file)

@@ -1,6 +1,7 @@
 import os
 import shutil
 import zipfile
+import random
 
 NUM_FOLDERS = 10
 
@@ -23,8 +24,7 @@ if __name__ == "__main__":
                 for root,dirs,files in os.walk("tmp"):
                     for file in files:
                         if file.endswith(".obj"):
-                            print(root)
-                            shutil.move(os.path.join(root,file), os.path.join("data","ShapenetRedistributed",str(hash(root)%NUM_FOLDERS),str(hash(root))+".obj"))
+                            shutil.move(os.path.join(root,file), os.path.join("data","ShapenetRedistributed",str(random.randint(0,9)),root.split('\\')[-2] + ".obj"))
 
 
     empty_tmp()

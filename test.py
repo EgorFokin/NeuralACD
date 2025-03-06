@@ -9,16 +9,147 @@ import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import random
+from model import model
+from torchviz import make_dot
+
+os.environ["PYTHONHASHSEED"] = "0"
+
+os.environ["PATH"] += os.pathsep + 'C:\\Program Files (x86)\\Graphviz\\bin'
+
+
+from prettytable import PrettyTable
+
+def normalize_mesh(mesh):
+    # Get the vertex positions as a NumPy array
+    vertices = np.asarray(mesh.vertices)
+
+    # Compute bounding box
+    x_min, y_min, z_min = vertices.min(axis=0)
+    x_max, y_max, z_max = vertices.max(axis=0)
+
+    # Compute max length and midpoints
+    m_len = max(x_max - x_min, y_max - y_min, z_max - z_min)
+    m_Xmid = (x_max + x_min) / 2
+    m_Ymid = (y_max + y_min) / 2
+    m_Zmid = (z_max + z_min) / 2
+
+    # Normalize vertices
+    vertices = 2.0 * (vertices - np.array([m_Xmid, m_Ymid, m_Zmid])) / m_len
+    mesh.vertices = o3d.utility.Vector3dVector(vertices)
+
+    return mesh
 
 if __name__ == "__main__":
+    mesh = o3d.io.read_triangle_mesh("broken_mesh.obj")
+    cmesh = coacd_modified.Mesh(np.asarray(mesh.vertices), np.asarray(mesh.triangles))
+    result = coacd_modified.normalize(cmesh)
+    result2 = normalize_mesh(mesh)
 
-    c = 0
-    mx = -float('inf')
-    mn = float('inf')
+    #check that the vertices are the same
+    print(np.allclose(np.asarray(result.vertices),np.asarray(mesh.vertices)))
 
-    with open("plane_cache.json", "r") as plane_cache_f:
-        plane_cache = json.load(plane_cache_f)
-        print(len(plane_cache))
+    #check that the faces are the same
+    print(np.allclose(np.asarray(result.indices),np.asarray(mesh.triangles)))
+
+
+
+
+# if __name__ == "__main__":
+
+#     obj = trimesh.load("ex.obj")
+#     #check if the obj contains a scene instead of a single mesh
+#     if isinstance(obj,trimesh.Scene):
+
+#         mesh = trimesh.util.concatenate(
+#             tuple(trimesh.Trimesh(vertices=g.vertices, faces=g.faces)
+#                 for g in obj.geometry.values()))
+#     else:
+#         mesh = obj
+
+#     cmesh = coacd_modified.Mesh(np.asarray(mesh.vertices), np.asarray(mesh.faces))
+#     result = coacd_modified.normalize(cmesh)
+
+#     planes = coacd_modified.best_cutting_planes(cmesh, num_planes=5)
+#     print([(plane.a, plane.b, plane.c, plane.d, plane.score) for plane in planes])
+
+#     print()
+
+#     m = coacd_modified.run_coacd(cmesh)
+#     trimesh.Trimesh(m[0][0],m[0][1]).export("decomposed.obj")
+
+#     trimesh.Trimesh(result.vertices, result.indices).export("normalized.obj")
+
+
+# def count_parameters(m):
+#     table = PrettyTable(["Modules", "Parameters"])
+#     total_params = 0
+#     for name, parameter in m.named_parameters():
+#         if not parameter.requires_grad:
+#             continue
+#         params = parameter.numel()
+#         table.add_row([name, params])
+#         total_params += params
+#     print(table)
+#     print(f"Total Trainable Params: {total_params}")
+#     return total_params
+
+
+# if __name__ == "__main__":
+
+#     p = model.get_model(4).cuda()
+#     count_parameters(p)
+
+    # with open("plane_cache.json", "r") as plane_cache_f:
+    #     cache1 = json.load(plane_cache_f)
+
+    # cache2 = dict()
+
+
+    # for mesh_hash, mesh in load_shapenet(debug=False,data_folder="data/ShapeNetRedistributed"):
+    #     hash2 = str(hash((mesh.vertices, mesh.faces)))
+    #     cache2[mesh_hash] = cache1[hash2]
+
+    # with open("plane_cache2.json", "w") as plane_cache_f:
+    #     json.dump(cache2,plane_cache_f)
+
+
+# if __name__ == "__main__":
+
+#     c = 0
+#     sm = 0
+
+#     with open("plane_cache.json", "r") as plane_cache_f:
+#         plane_cache = json.load(plane_cache_f)
+#         for key,value in plane_cache.items():
+#             if len(value) < 5:
+#                 continue
+#             planes = [p[:4] for p in value]
+#             for i in range(len(planes)):
+#                 if planes[i][3]<0:
+#                     planes[i] = [-p for p in planes[i]]
+#             plane = torch.tensor(planes,dtype=torch.float32)
+#             plane = F.normalize(plane, dim=-1)
+#             random_plane = [random.uniform(-1,1),random.uniform(-1,1),random.uniform(-1,1),random.uniform(0,1)]
+
+#             random_plane = torch.tensor(random_plane,dtype=torch.float32)
+#             random_plane = F.normalize(random_plane, dim=-1)
+#             #print(plane.shape,random_plane.shape)
+#             loss_fn = nn.MSELoss(reduction='none')  # Compute element-wise MSE
+
+#             # Compute MSE loss for all target planes
+#             loss = loss_fn(random_plane.unsqueeze(0), plane)  # Shape: (B, M, 4)
+
+#             # Sum over the last dimension (MSE is applied to 4D vectors)
+#             loss = loss.mean(dim=-1)  # Shape: (B, M)
+
+#             # Take the minimum loss over the M target planes for each batch
+#             min_loss, _ = loss.min(dim=-1) 
+#             sm+=min_loss.mean().item()
+#             c+=1
+#         print(sm/c)
+            
+                
     #     for key, value in plane_cache.items():
     #         for plane in value:
     #             rotation = trimesh.transformations.random_rotation_matrix()
