@@ -15,31 +15,7 @@ WORKERS = 6
 NUM_PLANES = 5
 NUM_POINTS = 512
 
-def apply_random_rotation(mesh):
-    rotation = o3d.geometry.get_rotation_matrix_from_xyz(np.random.rand(3) * 2 * np.pi)
-    mesh.rotate(rotation, center=(0, 0, 0))
-    return rotation
 
-def apply_rotation_to_plane(a,b,c,d,rotation):
-    normal = np.array([a, b, c])
-
-    rotation = rotation[:3,:3]
-    
-    rotated_normal = rotation @ normal
-
-    if np.linalg.norm(normal) == 0:
-        raise ValueError("Invalid plane normal (0,0,0).")
-
-    point_on_plane = -d * normal / np.linalg.norm(normal) ** 2 
-    rotated_point = rotation @ point_on_plane 
-
-    d_new = -np.dot(rotated_normal, rotated_point)
-
-    if d_new < 0: #make the signs of coeffs consistent
-        rotated_normal = -rotated_normal
-        d_new = -d_new
-
-    return rotated_normal[0], rotated_normal[1], rotated_normal[2], d_new 
 
 def recalculate_planes(cmesh):
     planes = coacd_modified.best_cutting_planes(cmesh, num_planes=NUM_PLANES)
@@ -50,7 +26,7 @@ def process_mesh(mesh_hash, mesh, plane_cache):
     cache_updated = False
 
     cmesh = coacd_modified.Mesh(np.asarray(mesh.vertices), np.asarray(mesh.triangles))
-    result = coacd_modified.normalize(cmesh)
+    _,result = coacd_modified.normalize(cmesh)
 
     normalized_mesh = o3d.geometry.TriangleMesh()
     normalized_mesh.vertices = o3d.utility.Vector3dVector(result.vertices)

@@ -1,3 +1,4 @@
+#Some of the code was taken from https://github.com/ChrisWu1997/DeepCAD, credit: Chris Wu
 import torch.nn as nn
 import torch.nn.functional as F
 import torch
@@ -21,7 +22,7 @@ class get_model(nn.Module):
                 radius=0.1,
                 nsample=64,
                 mlp=[0, 32, 32, 64],
-                # bn=False,
+                bn=False,
                 use_xyz=self.use_xyz,
             )
         )
@@ -32,7 +33,7 @@ class get_model(nn.Module):
                 radius=0.2,
                 nsample=64,
                 mlp=[64, 64, 64, 128],
-                # bn=False,
+                bn=False,
                 use_xyz=self.use_xyz,
             )
         )
@@ -43,7 +44,7 @@ class get_model(nn.Module):
                 radius=0.4,
                 nsample=64,
                 mlp=[128, 128, 128, 256],
-                # bn=False,
+                bn=False,
                 use_xyz=self.use_xyz,
             )
         )
@@ -51,7 +52,7 @@ class get_model(nn.Module):
         self.SA_modules.append(
             PointnetSAModule(
                 mlp=[256, 256, 512, 1024],
-                # bn=False,
+                bn=False,
                 use_xyz=self.use_xyz
             )
         )
@@ -97,24 +98,8 @@ class get_loss(nn.Module):
         super(get_loss, self).__init__()
 
     def forward(self, pred, target):
-            # # Normalize predictions and target hyperplanes
-            # pred_norm = F.normalize(pred, dim=-1)  # Shape: (B, N)
-            # target_norm = F.normalize(target, dim=-1)  # Shape: (B, M, N)
-
-            # # Compute cosine similarity (higher is better, so we minimize 1 - cosine similarity)
-            # cosine_sim = torch.matmul(pred_norm.unsqueeze(1), target_norm.transpose(-1, -2)).squeeze(1)  # Shape: (B, M)
-
-            # # Convert similarity to loss (1 - similarity)
-            # loss = 1 - cosine_sim  # Shape: (B, M)
-
-            # # Take the minimum loss over the M target planes
-            # min_loss, _ = loss.min(dim=1)  # Shape: (B,)
-
-            # return min_loss.mean()  # Return mean loss over the batch
 
 
-
-            target_norm = F.normalize(target, dim=-1)
             #target_norm[..., 3] = target_norm[..., 3] * 2 - 1 # d is always positive, so we need to convert it to the range [-1, 1]
 
 
@@ -122,12 +107,33 @@ class get_loss(nn.Module):
             loss_fn = nn.MSELoss(reduction='none')  # Compute element-wise MSE
 
             # Compute MSE loss for all target planes
-            loss = loss_fn(pred.unsqueeze(1), target_norm)  # Shape: (B, M, 4)
+            loss = loss_fn(pred.unsqueeze(1), target)  # Shape: (B, M, 4)
 
             # Sum over the last dimension (MSE is applied to 4D vectors)
-            loss = loss.mean(dim=-1)  # Shape: (B, M)
+            mse = loss.mean(dim=-1)  # Shape: (B, M)
 
-            # Take the minimum loss over the M target planes for each batch
+
+            #compare normal directions
+            pred_dir = pred[..., :3]  # Shape: (B, 3)
+            target_dir = target[..., :3]  # Shape: (B, M, 3)
+
+            # Normalize the direction vectors to compare only their directions
+            pred_dir_norm = F.normalize(pred_dir, dim=-1)  # Shape: (B, 3)
+            target_dir_norm = F.normalize(target_dir, dim=-1)  # Shape: (B, M, 3)
+
+            # Compute cosine similarity (higher means better alignment)
+            cosine_sim = torch.matmul(pred_dir_norm.unsqueeze(1), target_dir_norm.transpose(-1, -2)).squeeze(1)  # Shape: (B, M)
+
+            # Convert similarity to loss (1 - similarity, so lower is better)
+            cosine = 1 - cosine_sim  # Shape: (B, M)
+
+            
+
+            loss = mse + 0.5*cosine
+
+            # Take the minimum loss over the M target planes
             min_loss, _ = loss.min(dim=1)  # Shape: (B,)
+            normalization_loss = torch.abs((1 - torch.norm(pred_dir, dim=-1)))
 
-            return min_loss.mean()  # Return mean loss over the batch
+
+            return min_loss.mean() + normalization_loss.mean()

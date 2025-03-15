@@ -1,3 +1,4 @@
+#Some of the code was taken from https://github.com/yanx27/Pointnet_Pointnet2_pytorch, credit: Xu Yan
 import os
 import torch
 import datetime
@@ -7,13 +8,13 @@ import shutil
 import numpy as np
 import json
 import warnings
-
+import numpy as np
 import open3d as o3d
+import random
 
 
 from pathlib import Path
 from utils.BaseUtils import *
-from utils.preprocessor import preprocess_data
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
@@ -34,28 +35,21 @@ np.random.seed(0)
 torch.backends.cudnn.deterministic = True
 
 
-LR = 0.0001
+LR = 1e-04
 DECAY = 1e-4
 DECAY_STEP = 10
 LR_DECAY = 0.7
-EPOCHS = 200
+EPOCHS = 1000
 
-LEARNING_RATE_CLIP = 1e-5
+LEARNING_RATE_CLIP = 1e-6
 MOMENTUM_ORIGINAL = 0.1
 MOMENTUM_DECCAY = 0.5
 MOMENTUM_DECCAY_STEP = DECAY_STEP
 
 BATCH_SIZE = 32
 
-WEIGHTS_PATH = "C:\\Users\\egorf\\Desktop\\cmpt469\\DeepConvexDecomposition\\log\\2025-03-01_17-04\\checkpoints\\best_model.pth"
+WEIGHTS_PATH = "C:\\Users\\egorf\\Desktop\\cmpt469\\DeepConvexDecomposition\\log\\2025-03-14_11-55\\checkpoints\\checkpoint.pth"
 
-
-
-
-def inplace_relu(m):
-    classname = m.__class__.__name__
-    if classname.find('ReLU') != -1:
-        m.inplace=True
         
 
 
@@ -64,6 +58,39 @@ def save_checkpoint(state, is_best, checkpoint, filename='checkpoint.pth'):
     torch.save(state, filepath)
     if is_best:
         shutil.copyfile(filepath, os.path.join(checkpoint, 'best_model.pth'))
+
+def load_point_clouds(data_folder,plane_cache,batch_size):
+    batch = [[],[]]
+    for root, _, files in os.walk(data_folder): 
+        for file in files:
+            if file.endswith(".npy"):
+                with open(os.path.join(root, file), "rb") as f:
+                    points = np.load(f)
+                    mesh_hash = file.split(".")[0]
+                    if mesh_hash in plane_cache and len(plane_cache[mesh_hash]) == 5:
+                        planes = plane_cache[mesh_hash]
+                    else:
+                        continue
+                    
+                    if random.random() < 0.75:
+                        rotation = o3d.geometry.get_rotation_matrix_from_xyz(np.random.rand(3) * 2 * np.pi)
+                    else:
+                        rotation = np.eye(3)
+
+                    points = np.dot(points, rotation[:3,:3].T)
+
+                    planes = [apply_rotation_to_plane(*plane[:4],rotation) for plane in planes]
+                    batch[0].append(points)
+                    batch[1].append(planes)
+                    if len(batch[0]) == batch_size:
+
+                        points = torch.tensor(np.array(batch[0]), dtype=torch.float32).cuda()
+                        target = torch.tensor(np.array(batch[1]), dtype=torch.float32).cuda()
+                        yield points, target
+                        batch = [[],[]]
+
+
+                
 
 def main():
     def log_string(str):
@@ -81,7 +108,6 @@ def main():
     log_dir = exp_dir.joinpath('logs/')
     log_dir.mkdir(exist_ok=True)
 
-    '''LOG'''
     logger = logging.getLogger("Model")
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter(
@@ -90,9 +116,6 @@ def main():
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
-
-
-    '''MODEL LOADING'''
 
     num_output = 4
 
@@ -104,8 +127,6 @@ def main():
 
     predictor = model.get_model(num_output).cuda()
     criterion = model.get_loss().cuda()
-    #predictor.apply(inplace_relu)
-
 
     start_epoch = 0
 
@@ -127,7 +148,6 @@ def main():
         log_string(f"Failed to load model from checkpoint: {e}")
 
 
-
     
 
     def bn_momentum_adjust(m, momentum):
@@ -136,15 +156,16 @@ def main():
 
     
 
-    log_string(f'Using{torch.cuda.get_device_name(torch.cuda.current_device())}')
+    log_string(f'Using {torch.cuda.get_device_name(torch.cuda.current_device())}')
 
     best_loss = float('inf')
+    loss_list = []
+    val_loss_list = []
 
     for epoch in range(start_epoch, EPOCHS):
 
         log_string('Epoch %d (%d/%s):' %
                    (epoch + 1, epoch + 1, EPOCHS))
-        '''Adjust learning rate and BN momentum'''
         lr = max(LR * (LR_DECAY **
                  (epoch // DECAY_STEP)), LEARNING_RATE_CLIP)
         log_string('Learning rate:%f' % lr)
@@ -159,19 +180,16 @@ def main():
             lambda x: bn_momentum_adjust(x, momentum))
         predictor = predictor.train()
 
-        '''learning one epoch'''
         i = 0
         
         batch = []
 
         running_tloss = 0
 
-        train_loader = load_shapenet(debug=True, data_folder="data/ShapenetRedistributed")
-        validation_loader = load_shapenet(debug=False, data_folder="data/ShapenetRedistributed_val")
 
         processing_start = datetime.datetime.now()
 
-        for batch in preprocess_data(train_loader, plane_cache, BATCH_SIZE):
+        for batch in load_point_clouds("data/ShapeNetPointCloud", plane_cache, BATCH_SIZE):
             log_string(f"Processing time: { datetime.datetime.now()-processing_start}")
 
             optimizer.zero_grad()
@@ -194,20 +212,16 @@ def main():
             loss = criterion(seg_pred, target)
             loss.backward()
             optimizer.step()
+            l =  loss.item()
+            running_tloss += l
+            loss_list.append(l)
             log_string(f"Training time: { datetime.datetime.now()-start_time}")
-            running_tloss += loss.item()
             log_string(f'Training loss: {running_tloss/(i+1)}')
             i+=1
             log_string(f"{i*BATCH_SIZE} meshes processed")
 
-            del batch, points, target, seg_pred, loss
-            torch.cuda.empty_cache()
-
             processing_start = datetime.datetime.now()
-          
-            
 
-        
 
         #validation
         log_string("Running validation...")
@@ -216,7 +230,7 @@ def main():
         i = 0
         with torch.no_grad():
 
-            for batch in preprocess_data(validation_loader, plane_cache, BATCH_SIZE):
+            for batch in load_point_clouds("data/ShapeNetPointCloud_val", plane_cache, BATCH_SIZE):
 
                 points,target = batch
 
@@ -229,7 +243,9 @@ def main():
                     points)
                 
                 loss = criterion(seg_pred,target)
-                running_vloss += loss.item()
+                l = loss.item()
+                running_vloss += l
+                val_loss_list.append(l)
                 i+=1
                 log_string(f"{i*BATCH_SIZE} val meshes processed")
         
@@ -240,6 +256,8 @@ def main():
             best_loss = running_vloss
             best = True
 
+        with open(str(exp_dir) + '/history.json', 'w') as f:
+            json.dump({'train': loss_list, 'val': val_loss_list}, f)
 
         save_checkpoint({
             'epoch': epoch + 1,

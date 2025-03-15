@@ -2,7 +2,7 @@ import coacd_modified
 import numpy as np
 import trimesh
 from utils.BaseUtils import *
-import pyntcloud
+#import pyntcloud
 import json
 import datetime
 import time
@@ -12,45 +12,240 @@ import torch.nn.functional as F
 import random
 from model import model
 from torchviz import make_dot
-
-os.environ["PYTHONHASHSEED"] = "0"
-
-os.environ["PATH"] += os.pathsep + 'C:\\Program Files (x86)\\Graphviz\\bin'
+import open3d as o3d
 
 
-from prettytable import PrettyTable
+# def forward(pred, target):
 
-def normalize_mesh(mesh):
-    # Get the vertex positions as a NumPy array
-    vertices = np.asarray(mesh.vertices)
 
-    # Compute bounding box
-    x_min, y_min, z_min = vertices.min(axis=0)
-    x_max, y_max, z_max = vertices.max(axis=0)
+#         #target_norm[..., 3] = target_norm[..., 3] * 2 - 1 # d is always positive, so we need to convert it to the range [-1, 1]
 
-    # Compute max length and midpoints
-    m_len = max(x_max - x_min, y_max - y_min, z_max - z_min)
-    m_Xmid = (x_max + x_min) / 2
-    m_Ymid = (y_max + y_min) / 2
-    m_Zmid = (z_max + z_min) / 2
 
-    # Normalize vertices
-    vertices = 2.0 * (vertices - np.array([m_Xmid, m_Ymid, m_Zmid])) / m_len
-    mesh.vertices = o3d.utility.Vector3dVector(vertices)
+#         #distance to the closest plane
+#         loss_fn = nn.MSELoss(reduction='none')  # Compute element-wise MSE
 
-    return mesh
 
-if __name__ == "__main__":
-    mesh = o3d.io.read_triangle_mesh("broken_mesh.obj")
-    cmesh = coacd_modified.Mesh(np.asarray(mesh.vertices), np.asarray(mesh.triangles))
-    result = coacd_modified.normalize(cmesh)
-    result2 = normalize_mesh(mesh)
+#         # Compute MSE loss for all target planes
+#         loss = loss_fn(pred.unsqueeze(1), target)  # Shape: (B, M, 4)
 
-    #check that the vertices are the same
-    print(np.allclose(np.asarray(result.vertices),np.asarray(mesh.vertices)))
+#         # Sum over the last dimension (MSE is applied to 4D vectors)
+#         mse = loss.mean(dim=-1)  # Shape: (B, M)
 
-    #check that the faces are the same
-    print(np.allclose(np.asarray(result.indices),np.asarray(mesh.triangles)))
+
+#         #compare normal directions
+#         pred_dir = pred[..., :3]  # Shape: (B, 3)
+#         target_dir = target[..., :3]  # Shape: (B, M, 3)
+
+#         # Normalize the direction vectors to compare only their directions
+#         pred_dir_norm = F.normalize(pred_dir, dim=-1)  # Shape: (B, 3)
+#         target_dir_norm = F.normalize(target_dir, dim=-1)  # Shape: (B, M, 3)
+
+#         # Compute cosine similarity (higher means better alignment)
+#         cosine_sim = torch.matmul(pred_dir_norm.unsqueeze(1), target_dir_norm.transpose(-1, -2)).squeeze(1)  # Shape: (B, M)
+
+#         # Convert similarity to loss (1 - similarity, so lower is better)
+#         cosine = 1 - cosine_sim  # Shape: (B, M)
+
+        
+
+#         loss = mse + 0.5*cosine
+
+#         # Take the minimum loss over the M target planes
+#         min_loss, _ = loss.min(dim=1)  # Shape: (B,)
+#         normalization_loss = torch.abs((1 - torch.norm(pred_dir, dim=-1)))
+
+#         print("mse:",mse)
+#         print("cosine:",cosine)
+#         print("loss:",loss)
+#         print("min_loss:",min_loss)
+#         print("normalization_loss:",normalization_loss)
+#         return min_loss.mean() + normalization_loss.mean()
+
+
+# os.environ["PYTHONHASHSEED"] = "0"
+
+# os.environ["PATH"] += os.pathsep + 'C:\\Program Files (x86)\\Graphviz\\bin'
+
+# MODEL_PATH = "C:\\Users\\egorf\\Desktop\\cmpt469\\DeepConvexDecomposition\\log\\2025-03-13_15-15\\checkpoints\\checkpoint.pth"
+
+# predictor = model.get_model(4).cuda()
+
+# predictor.load_state_dict(torch.load(MODEL_PATH)['model_state_dict'])
+
+# from prettytable import PrettyTable
+
+# with open("data/ShapeNetPointCloud_val/ffbf17fbe4ca367d54cd2a0ea6cb618b.npy","rb") as f:
+#     points = np.load(f)
+
+# with open("plane_cache.json", "r") as plane_cache_f:
+#     cache = json.load(plane_cache_f)
+
+# pnt = o3d.geometry.PointCloud()
+# pnt.points = o3d.utility.Vector3dVector(points)
+
+# planes = cache["ffbf17fbe4ca367d54cd2a0ea6cb618b"]
+
+# rotation = np.eye(3)
+
+# planes = [apply_rotation_to_plane(*plane[:4],rotation) for plane in planes]
+
+# #print(torch.tensor(planes))
+# points = points.reshape(1, -1, 512)
+
+# predicted = predictor(torch.tensor(points,dtype=torch.float32).cuda())
+
+# # print(predicted)
+
+# # print(predicted.norm(dim=-1))
+
+# target = torch.tensor(planes,dtype=torch.float32).cuda()
+
+# target = target.reshape(1, -1, 4)
+
+# print(predicted)
+# print(target)
+# print(forward(predicted,target))
+
+
+
+
+#o3d.visualization.draw_geometries([pnt])
+
+# def forward(pred, target):
+
+#     target_norm = F.normalize(target, dim=-1)
+#     #target_norm[..., 3] = target_norm[..., 3] * 2 - 1 # d is always positive, so we need to convert it to the range [-1, 1]
+
+
+#     #distance to the closest plane
+#     loss_fn = nn.MSELoss(reduction='none')  # Compute element-wise MSE
+#     print(pred.unsqueeze(1))
+#     print(target_norm)
+#     print("-------------------")
+
+#     # Compute MSE loss for all target planes
+#     loss = loss_fn(pred.unsqueeze(1), target_norm)  # Shape: (B, M, 4)
+
+#     # Sum over the last dimension (MSE is applied to 4D vectors)
+#     mse = loss.mean(dim=-1)  # Shape: (B, M)
+
+
+#     #compare normal directions
+#     pred_dir = pred[..., :3]  # Shape: (B, 3)
+#     target_dir = target[..., :3]  # Shape: (B, M, 3)
+
+#     # Normalize the direction vectors to compare only their directions
+#     pred_dir_norm = F.normalize(pred_dir, dim=-1)  # Shape: (B, 3)
+#     target_dir_norm = F.normalize(target_dir, dim=-1)  # Shape: (B, M, 3)
+
+#     # Compute cosine similarity (higher means better alignment)
+#     cosine_sim = torch.matmul(pred_dir_norm.unsqueeze(1), target_dir_norm.transpose(-1, -2)).squeeze(1)  # Shape: (B, M)
+
+#     # Convert similarity to loss (1 - similarity, so lower is better)
+#     cosine = 1 - cosine_sim  # Shape: (B, M)
+
+#     loss = mse + cosine
+
+#     # Take the minimum loss over the M target planes
+#     min_loss, _ = loss.min(dim=1)  # Shape: (B,)
+
+#     print("mse:",mse)
+#     print("cosine:",cosine)
+#     print("min_loss:",min_loss)
+#     print("-------------------")
+
+
+#     return min_loss.mean()
+
+# # Similar planes (should minimize loss)
+# similar_planes_pred = F.normalize(torch.tensor([
+#     [0.707, 0.707, 0, 5],   # Identical planes
+#     [0.705, 0.709, 0, 5.1], # Slightly perturbed normal
+#     [1, 0, 0, 3.2]          # Parallel planes with slight offset
+# ]),dim=-1)
+
+# similar_planes_target = torch.tensor([
+#     [[0.707, 0.707, 0, 5], [1, 0, 0, 3.2]],   # Identical
+#     [[0.707, 0.707, 0, 5],[0.705, 0.709, 0, 5.1]],   # Slightly perturbed normal
+#     [[1, 0, 0, 3], [1, 0, 0, 3.2] ]            # Parallel
+# ])
+
+# # Dissimilar planes (should maximize loss)
+# dissimilar_planes_pred =  F.normalize(torch.tensor([
+#     [0, -1, 0, 2],  # Opposite normals
+#     [0, 1, 0, 1],   # Perpendicular normals
+#     [0, 0, 1, 100], # Extreme offset difference
+#     [-0.3, 0.1, 0.95, 20]  # Completely random normal
+# ]),dim=-1)
+
+# dissimilar_planes_target = torch.tensor([
+#     [[0, 1, 0, 2]],  # Opposite normals
+#     [[1, 0, 0, 1]],  # Perpendicular normals
+#     [[0, 0, 1, 2]],  # Extreme offset difference
+#     [[0.6, 0.8, 0, 4]]  # Completely random normal
+# ])
+
+# # Test similar planes
+# loss = forward(similar_planes_pred, similar_planes_target)
+# print(f"Similar planes loss: {loss.item()}")
+
+# # Test dissimilar planes
+# loss = forward(dissimilar_planes_pred, dissimilar_planes_target)
+# print(f"Dissimilar planes loss: {loss.item()}")
+
+
+
+
+# m = model.get_model(4).cuda()
+
+# x = torch.randn(16,3,512).cuda()
+# print(x.shape)
+# y = m(x)
+
+
+
+# make_dot(y.mean(), params=dict(m.named_parameters())).render("viz", format="png")
+
+
+# def normalize_mesh(mesh):
+#     # Get the vertex positions as a NumPy array
+#     vertices = np.asarray(mesh.vertices)
+
+#     # Compute bounding box
+#     x_min, y_min, z_min = vertices.min(axis=0)
+#     x_max, y_max, z_max = vertices.max(axis=0)
+
+#     # Compute max length and midpoints
+#     m_len = max(x_max - x_min, y_max - y_min, z_max - z_min)
+#     m_Xmid = (x_max + x_min) / 2
+#     m_Ymid = (y_max + y_min) / 2
+#     m_Zmid = (z_max + z_min) / 2
+
+#     # Normalize vertices
+#     vertices = 2.0 * (vertices - np.array([m_Xmid, m_Ymid, m_Zmid])) / m_len
+#     mesh.vertices = o3d.utility.Vector3dVector(vertices)
+
+#     return mesh
+
+# if __name__ == "__main__":
+#     # mesh = o3d.io.read_triangle_mesh("broken_mesh.obj")
+#     # cmesh = coacd_modified.Mesh(np.asarray(mesh.vertices), np.asarray(mesh.triangles))
+#     # result = coacd_modified.normalize(cmesh)
+#     # result2 = normalize_mesh(mesh)
+
+#     # #check that the vertices are the same
+#     # print(np.allclose(np.asarray(result.vertices),np.asarray(mesh.vertices)))
+
+#     # #check that the faces are the same
+#     # print(np.allclose(np.asarray(result.indices),np.asarray(mesh.triangles)))
+#     with open("data/ShapeNetPointCloud/1a00aa6b75362cc5b324368d54a7416f.npy", "rb") as f:
+#         points = np.load(f)
+#         rotation = o3d.geometry.get_rotation_matrix_from_xyz(np.random.rand(3) * 2 * np.pi)
+#         print(rotation)
+#         print(points[0])
+#         points = np.dot(points, rotation[:3,:3].T)
+#         print(points[0])
+
 
 
 
