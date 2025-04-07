@@ -48,7 +48,7 @@ MOMENTUM_DECCAY_STEP = DECAY_STEP
 
 BATCH_SIZE = 32
 
-WEIGHTS_PATH = "C:\\Users\\egorf\\Desktop\\cmpt469\\DeepConvexDecomposition\\log\\2025-03-14_11-55\\checkpoints\\checkpoint.pth"
+#WEIGHTS_PATH = "models/best_model.pth"
 
         
 

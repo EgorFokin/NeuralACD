@@ -12,7 +12,7 @@ import trimesh
 import copy
 
 
-MODEL_PATH =  "C:\\Users\\egorf\\Desktop\\cmpt469\\DeepConvexDecomposition\\log\\2025-03-16_15-11\\checkpoints\\checkpoint.pth"
+MODEL_PATH =  "model/best_model.pth"
 #np.random.seed(0)
 
 predictor = model.get_model(4).cuda()

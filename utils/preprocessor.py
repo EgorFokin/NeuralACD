@@ -1,3 +1,5 @@
+#not used in the current version
+
 import coacd_modified
 import open3d as o3d
 import json

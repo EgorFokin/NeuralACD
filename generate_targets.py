@@ -1,5 +1,3 @@
-# Some of the code is taken from https://github.com/yanx27/Pointnet_Pointnet2_pytorch/tree/master CREDIT: Benny
-
 import argparse
 import os
 import datetime
@@ -12,8 +10,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 from pathlib import Path
 from utils.BaseUtils import *
 import threading
-
-os.environ["PYTHONHASHSEED"] = "0"
 
 
 dict_lock = threading.Lock()
