@@ -4,10 +4,16 @@ import coacd_modified
 import numpy as np
 from model import model
 import random
+from concurrent.futures import ThreadPoolExecutor,ProcessPoolExecutor
+import datetime
+import os
+import sys
+import trimesh
+import copy
 
-MODEL_PATH =  "C:\\Users\\egorf\\Desktop\\cmpt469\\DeepConvexDecomposition\\log\\2025-03-14_11-55\\checkpoints\\checkpoint.pth"
-MESH_PATH = "cow-nonormals.obj"
-np.random.seed(0)
+
+MODEL_PATH =  "C:\\Users\\egorf\\Desktop\\cmpt469\\DeepConvexDecomposition\\log\\2025-03-16_15-11\\checkpoints\\checkpoint.pth"
+#np.random.seed(0)
 
 predictor = model.get_model(4).cuda()
 
@@ -30,70 +36,170 @@ def revert_normalization(mesh,bbox):
     mesh.vertices = o3d.utility.Vector3dVector(vertices)
     mesh.compute_vertex_normals() 
 
-def split(mesh):
 
+def normalize_meshes(meshes):
+    bboxes = []
+    normalized_meshes = []
+    normalized_cmeshes = []
+    for mesh in meshes:
+        cmesh = coacd_modified.Mesh(np.asarray(mesh.vertices), np.asarray(mesh.triangles))
+        bbox,normalized_cmesh = coacd_modified.normalize(cmesh)
+        bboxes.append(bbox)
+        normalized_mesh = o3d.geometry.TriangleMesh()
+        normalized_mesh.vertices = o3d.utility.Vector3dVector(normalized_cmesh.vertices)
+        normalized_mesh.triangles = o3d.utility.Vector3iVector(normalized_cmesh.indices)
+        normalized_meshes.append(normalized_mesh)
+        normalized_cmeshes.append(normalized_cmesh)
 
-    cmesh = coacd_modified.Mesh(np.asarray(mesh.vertices), np.asarray(mesh.triangles))
-    bbox,normalized_cmesh = coacd_modified.normalize(cmesh)
+    return bboxes,normalized_meshes,normalized_cmeshes
 
-
-    normalized_mesh = o3d.geometry.TriangleMesh()
-    normalized_mesh.vertices = o3d.utility.Vector3dVector(normalized_cmesh.vertices)
-    normalized_mesh.triangles = o3d.utility.Vector3iVector(normalized_cmesh.indices)
-
-    pnt = normalized_mesh.sample_points_poisson_disk(number_of_points=512, init_factor=3)
-    points = np.asarray(pnt.points)
-
-    points = points.reshape(1, -1, 512)
-    points = torch.tensor(points, dtype=torch.float32).cuda()
-
-    with torch.no_grad():
-        plane = predictor(points)
+def get_point_clouds(meshes):
+    point_clouds = []
+    for mesh in meshes:
+        pnt = mesh.sample_points_poisson_disk(number_of_points=512, init_factor=3)
+        points = np.asarray(pnt.points)
+        point_clouds.append(points)
     
-    plane = coacd_modified.CoACD_Plane(*list(plane.cpu().numpy()[0]),0)
-    result = coacd_modified.clip(normalized_cmesh, plane)
+    return np.array(point_clouds)
 
+def normalize_planes(planes):
+    new_planes = []
+    for i in range(len(planes)):
+        plane = planes[i]
+        plane_abc = plane[:3]
+        plane_d = plane[3]
+        plane_abc = plane_abc / torch.norm(plane_abc)
+        plane = torch.cat([plane_abc, plane_d.view(1)])
+        plane = coacd_modified.CoACD_Plane(*list(plane.cpu().numpy()),0)
+        new_planes.append(plane)
+    
+    return new_planes
+
+
+def cut_mesh(cmesh,plane,bbox):
+    result = coacd_modified.clip(cmesh, plane)
     parts = []
-
     for vs,fs in result:
+        if len(vs) == 0 or len(fs) == 0:
+            continue
         mesh = o3d.geometry.TriangleMesh()
         mesh.vertices = o3d.utility.Vector3dVector(vs)
         mesh.triangles = o3d.utility.Vector3iVector(fs)
         revert_normalization(mesh,bbox)
-        parts.append(mesh)
+
+
+        #if the produced mesh contains disconnected parts, we need to split them
+
+        triangle_clusters, cluster_n_triangles, cluster_area = mesh.cluster_connected_triangles()
+
+        
+
+        if (len(cluster_n_triangles) == 1):
+            parts.append(mesh)
+        else:
+            triangle_clusters = np.asarray(triangle_clusters)
+            for i in range(len(cluster_n_triangles)):
+                triangles_to_remove = triangle_clusters != i
+                new_mesh = copy.deepcopy(mesh)
+                new_mesh.remove_triangles_by_mask(triangles_to_remove)
+                new_mesh.remove_unreferenced_vertices()
+
+                parts.append(new_mesh)
+
+    
 
     return parts
 
+def get_convex_hulls(meshes):
+    hulls = []
+
+    concavity_sum = 0
+
+    for part in meshes:
+        cmesh = coacd_modified.Mesh(np.asarray(part.vertices), np.asarray(part.triangles))
+        bbox,normalized_cmesh = coacd_modified.normalize(cmesh)
+        hull, concavity = coacd_modified.compute_convex_hull(normalized_cmesh)
+
+        mesh = o3d.geometry.TriangleMesh()
+        mesh.vertices = o3d.utility.Vector3dVector(hull.vertices)
+        mesh.triangles = o3d.utility.Vector3iVector(hull.indices)
+        revert_normalization(mesh,bbox)
+        concavity_sum += concavity
+        hulls.append(mesh)
+
+    return hulls,concavity_sum/len(meshes)
+
+
+
+def decompose(mesh,depth,min_part_size=40):
 
 
     
+    parts = [mesh]        
 
-def decompose(mesh,depth):
-    if depth == 0:
-        return [mesh]
-    
-    parts = split(mesh)
 
-    result = []
-    for part in parts:
-        result += decompose(part,depth-1)
-    
-    return result
+
+    for _ in range(depth):
+        new_parts = []
+            
+        bboxes,normalized_meshes,normalized_cmeshes = normalize_meshes(parts)
+
+        clouds = get_point_clouds(normalized_meshes)
+
+        clouds = clouds.reshape(-1, 3, 512)
+
+        clouds = torch.tensor(clouds, dtype=torch.float32).cuda()
+
+        with torch.no_grad():
+            planes = predictor(clouds)
+
+            planes = normalize_planes(planes)
+
+        executor = ThreadPoolExecutor()
+        futures = []
+        for i in range(len(parts)):
+            if len(normalized_meshes[i].triangles) < min_part_size:
+                new_parts.append(parts[i])
+                continue
+            futures.append(executor.submit(cut_mesh,normalized_cmeshes[i],planes[i],bboxes[i]))
+        
+        for future in futures:
+            new_parts += future.result()
+
+        parts = new_parts
+        if len(parts) > 2**depth:
+            break
+
+    hulls,avg_concavity = get_convex_hulls(parts)
+
+    return parts,hulls,avg_concavity
     
 
 if __name__ == "__main__":
-    DEPTH = 3
-    mesh = o3d.io.read_triangle_mesh(MESH_PATH)
-
-
-
-    parts = decompose(mesh,DEPTH)
-
-    for i,part in enumerate(parts):
-        part.paint_uniform_color([random.random(),random.random(),random.random()])
+    if len(sys.argv) == 1:
+        print("Please provide a mesh file")
+        exit(0)
     
-    o3d.visualization.draw_geometries(parts)
-        
+    filename = sys.argv[1]
+
+    if len(sys.argv) > 2:
+        depth = int(sys.argv[2])
+    else:
+        depth = 5
+        print("Using default depth of 5")
+
+    mesh = o3d.io.read_triangle_mesh(filename)
+    parts,hulls,avg_concavity = decompose(mesh,depth)
+    print("avg concavity: ",avg_concavity)
+    print("number of parts: ",len(parts))
+
+    scene = trimesh.Scene()
+
+    for hull in hulls:
+        scene.add_geometry(trimesh.Trimesh(vertices=np.asarray(hull.vertices), faces=np.asarray(hull.triangles)))
+    
+    scene.export("decomposed.obj")
+    print("Decomposed mesh saved to: decomposed.obj")
 
 
 

@@ -41,7 +41,7 @@ DECAY_STEP = 10
 LR_DECAY = 0.7
 EPOCHS = 1000
 
-LEARNING_RATE_CLIP = 1e-6
+LEARNING_RATE_CLIP = 1e-5
 MOMENTUM_ORIGINAL = 0.1
 MOMENTUM_DECCAY = 0.5
 MOMENTUM_DECCAY_STEP = DECAY_STEP
@@ -65,12 +65,17 @@ def load_point_clouds(data_folder,plane_cache,batch_size):
         for file in files:
             if file.endswith(".npy"):
                 with open(os.path.join(root, file), "rb") as f:
-                    points = np.load(f)
+                    try:
+                        points = np.load(f)
+                    except Exception as e:
+                        print(file,e)
+                        continue
                     mesh_hash = file.split(".")[0]
                     if mesh_hash in plane_cache and len(plane_cache[mesh_hash]) == 5:
                         planes = plane_cache[mesh_hash]
                     else:
                         continue
+
                     
                     if random.random() < 0.75:
                         rotation = o3d.geometry.get_rotation_matrix_from_xyz(np.random.rand(3) * 2 * np.pi)
@@ -79,7 +84,14 @@ def load_point_clouds(data_folder,plane_cache,batch_size):
 
                     points = np.dot(points, rotation[:3,:3].T)
 
-                    planes = [apply_rotation_to_plane(*plane[:4],rotation) for plane in planes]
+                    try:
+                        planes = [apply_rotation_to_plane(*plane[:4],rotation) for plane in planes]
+                    except Exception as e:
+                        print(file,e)
+                        continue
+
+                    if torch.isnan(torch.tensor(points)).any() or torch.isnan(torch.tensor(planes)).any():
+                        continue
                     batch[0].append(points)
                     batch[1].append(planes)
                     if len(batch[0]) == batch_size:
@@ -206,8 +218,8 @@ def main():
             seg_pred = predictor(
                 points)
             
-            #log_string(target)
-            #log_string(seg_pred)
+            # log_string(target)
+            # log_string(seg_pred)
             
             loss = criterion(seg_pred, target)
             loss.backward()

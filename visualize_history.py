@@ -5,7 +5,7 @@ import numpy as np
 TRAIN_SIZE = 46240//32
 VAL_SIZE = 5152//32
 
-
+# I didn't train the model in one go, so we need to combine the history of all the runs
 versions = ["2025-03-10_15-39","2025-03-11_11-48", "2025-03-11_12-00", "2025-03-13_09-05","2025-03-13_15-15", "2025-03-14_11-55"]    
 
 history = {"train":[], "val":[]}
@@ -15,8 +15,6 @@ for version in versions:
         data = json.load(f)
         history["train"] += data["train"]
         history["val"] += data["val"]
-
-
 
 epochs = len(history["train"])//TRAIN_SIZE
 

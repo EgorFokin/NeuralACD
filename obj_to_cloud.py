@@ -32,5 +32,4 @@ def convert(data_folder,out):
             np.save(f,points)
 
 if __name__ == "__main__":
-    convert("data/ShapeNetRedistributed","data/ShapeNetPointCloud")
-    convert("data/ShapeNetRedistributed_val","data/ShapeNetPointCloud_val")
+    convert("data/ShapeNetParts","data/ShapeNetPartsCloud")

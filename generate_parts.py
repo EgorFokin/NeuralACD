@@ -1,7 +1,8 @@
 from utils.BaseUtils import *
 from decompose import decompose
 import os
-from concurrent.futures import ProcessPoolExecutor
+import multiprocessing
+import time
 
 o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Error)
 
@@ -16,8 +17,6 @@ def process(mesh_hash,vertices,faces):
 if __name__ == "__main__":
     if not os.path.exists("data/ShapeNetParts"):
         os.makedirs("data/ShapeNetParts")
-    
-    executor = ProcessPoolExecutor()
 
     for mesh_hash,mesh in load_shapenet(debug=True,data_folder="data/ShapeNetRedistributed"):
 
@@ -30,5 +29,7 @@ if __name__ == "__main__":
         #clip function sometimes causes assertion fails, which cannot be caught, so we have to use multiprocessing to avoid errors
         #this is probably due to the generated plane not intersecting with the mesh
 
+        p = multiprocessing.Process(target=process,args=(mesh_hash,vertices,faces))
+        p.start()
+        time.sleep(0.5)
         
-        executor.submit(process,mesh_hash,vertices,faces)
