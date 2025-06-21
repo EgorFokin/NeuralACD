@@ -1,6 +1,7 @@
 __pycache__/
 data/*
 tmp/
+test/
 log/
 *.obj
 *.mtl

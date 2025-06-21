@@ -44,7 +44,7 @@ def load_shapenet(debug=False, tmp_folder="tmp", data_folder="data/ShapeNetCore"
         for root,dirs,files in os.walk(tmp_folder):
             for file in files:
                 if file.endswith(".obj"):
-                    mesh_hash = ''.join(file.split('.')[:-1])
+                    mesh_hash = root.split(os.path.sep)[-2]
                     mesh = o3d.io.read_triangle_mesh(os.path.join(root,file))
                     yield mesh_hash,mesh
 
@@ -59,14 +59,14 @@ def load_shapenet(debug=False, tmp_folder="tmp", data_folder="data/ShapeNetCore"
                 for root,dirs,files in os.walk(tmp_folder):
                     for file in files:
                         if file.endswith(".obj"):
-                            mesh_hash = ''.join(file.split('.')[:-1])
+                            mesh_hash = root.split(os.path.sep)[-2]
                             mesh = o3d.io.read_triangle_mesh(os.path.join(root,file))
                             yield mesh_hash,mesh
 
     for root,dirs,files in os.walk(data_folder):
         for file in files:
             if file.endswith(".obj"):
-                mesh_hash = ''.join(file.split('.')[:-1])
+                mesh_hash = root.split(os.path.sep)[-2]
                 mesh = o3d.io.read_triangle_mesh(os.path.join(root,file))
                 yield mesh_hash,mesh
 

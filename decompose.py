@@ -10,14 +10,13 @@ import os
 import sys
 import trimesh
 import copy
+import shutil
 
 
 MODEL_PATH =  "model/best_model.pth"
 #np.random.seed(0)
 
-predictor = model.get_model(4).cuda()
 
-predictor.load_state_dict(torch.load(MODEL_PATH)['model_state_dict'])
 
 def revert_normalization(mesh,bbox):
     x_min, x_max, y_min, y_max, z_min, z_max = bbox
@@ -37,13 +36,13 @@ def revert_normalization(mesh,bbox):
     mesh.compute_vertex_normals() 
 
 
-def normalize_meshes(meshes):
+def normalize_meshes(meshes,make_manifold=True):
     bboxes = []
     normalized_meshes = []
     normalized_cmeshes = []
     for mesh in meshes:
         cmesh = coacd_modified.Mesh(np.asarray(mesh.vertices), np.asarray(mesh.triangles))
-        bbox,normalized_cmesh = coacd_modified.normalize(cmesh)
+        bbox,normalized_cmesh = coacd_modified.normalize(cmesh,make_manifold=make_manifold)
         bboxes.append(bbox)
         normalized_mesh = o3d.geometry.TriangleMesh()
         normalized_mesh.vertices = o3d.utility.Vector3dVector(normalized_cmesh.vertices)
@@ -68,7 +67,11 @@ def normalize_planes(planes):
         plane = planes[i]
         plane_abc = plane[:3]
         plane_d = plane[3]
+
         plane_abc = plane_abc / torch.norm(plane_abc)
+        plane_abc[0] = 0
+        plane_abc[1] = 0
+        plane_abc[2] = 1
         plane = torch.cat([plane_abc, plane_d.view(1)])
         plane = coacd_modified.CoACD_Plane(*list(plane.cpu().numpy()),0)
         new_planes.append(plane)
@@ -77,6 +80,12 @@ def normalize_planes(planes):
 
 
 def cut_mesh(cmesh,plane,bbox):
+    # mesh = o3d.geometry.TriangleMesh()
+    # mesh.vertices = o3d.utility.Vector3dVector(cmesh.vertices)
+    # mesh.triangles = o3d.utility.Vector3iVector(cmesh.indices)
+    # mesh.compute_vertex_normals()
+    # o3d.io.write_triangle_mesh("temp_mesh.ply", mesh)
+    # print(plane.a,plane.b,plane.c,plane.d)
     result = coacd_modified.clip(cmesh, plane)
     parts = []
     for vs,fs in result:
@@ -88,23 +97,28 @@ def cut_mesh(cmesh,plane,bbox):
         revert_normalization(mesh,bbox)
 
 
+
+
+
         #if the produced mesh contains disconnected parts, we need to split them
 
-        triangle_clusters, cluster_n_triangles, cluster_area = mesh.cluster_connected_triangles()
+        parts.append(mesh)
+        
+        # triangle_clusters, cluster_n_triangles, cluster_area = mesh.cluster_connected_triangles()
 
         
 
-        if (len(cluster_n_triangles) == 1):
-            parts.append(mesh)
-        else:
-            triangle_clusters = np.asarray(triangle_clusters)
-            for i in range(len(cluster_n_triangles)):
-                triangles_to_remove = triangle_clusters != i
-                new_mesh = copy.deepcopy(mesh)
-                new_mesh.remove_triangles_by_mask(triangles_to_remove)
-                new_mesh.remove_unreferenced_vertices()
+        # if (len(cluster_n_triangles) == 1):
+        #     parts.append(mesh)
+        # else:
+        #     triangle_clusters = np.asarray(triangle_clusters)
+        #     for i in range(len(cluster_n_triangles)):
+        #         triangles_to_remove = triangle_clusters != i
+        #         new_mesh = copy.deepcopy(mesh)
+        #         new_mesh.remove_triangles_by_mask(triangles_to_remove)
+        #         new_mesh.remove_unreferenced_vertices()
 
-                parts.append(new_mesh)
+        #         parts.append(new_mesh)
 
     
 
@@ -131,18 +145,21 @@ def get_convex_hulls(meshes):
 
 
 
-def decompose(mesh,depth,min_part_size=40):
+def decompose(mesh,depth,predictor,min_part_size=40): 
+    #o3d.io.write_triangle_mesh("input_mesh.ply", mesh)   
 
-
-    
     parts = [mesh]        
 
 
 
     for _ in range(depth):
         new_parts = []
-            
+        
         bboxes,normalized_meshes,normalized_cmeshes = normalize_meshes(parts)
+
+        # os.makedirs("tmp", exist_ok=True)
+        # for mesh in normalized_meshes:
+        #     o3d.io.write_triangle_mesh(f"tmp/{datetime.datetime.now().timestamp()}.ply", mesh)
 
         clouds = get_point_clouds(normalized_meshes)
 
@@ -166,11 +183,14 @@ def decompose(mesh,depth,min_part_size=40):
         for future in futures:
             new_parts += future.result()
 
+
         parts = new_parts
         if len(parts) > 2**depth:
             break
 
     hulls,avg_concavity = get_convex_hulls(parts)
+
+    #shutil.rmtree("tmp", ignore_errors=True)
 
     return parts,hulls,avg_concavity
     
@@ -179,6 +199,8 @@ if __name__ == "__main__":
     if len(sys.argv) == 1:
         print("Please provide a mesh file")
         exit(0)
+
+    coacd_modified.set_log_level("debug")
     
     filename = sys.argv[1]
 
@@ -188,8 +210,12 @@ if __name__ == "__main__":
         depth = 5
         print("Using default depth of 5")
 
+    predictor = model.get_model(4).cuda()
+
+    predictor.load_state_dict(torch.load(MODEL_PATH)['model_state_dict'])
+
     mesh = o3d.io.read_triangle_mesh(filename)
-    parts,hulls,avg_concavity = decompose(mesh,depth)
+    parts,hulls,avg_concavity = decompose(mesh,depth,predictor)
     print("avg concavity: ",avg_concavity)
     print("number of parts: ",len(parts))
 

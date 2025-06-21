@@ -1,3 +1,4 @@
+from utils.BaseUtils import *
 import argparse
 import os
 import datetime
@@ -8,13 +9,13 @@ import json
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 
 from pathlib import Path
-from utils.BaseUtils import *
+
 import threading
 
 
 dict_lock = threading.Lock()
 
-
+CACHE_PATH = "test/plane_cache.json"
 
 def process_mesh(mesh_hash,mesh, plane_cache):
 
@@ -51,11 +52,14 @@ if __name__ == "__main__":
     start_time = datetime.datetime.now()
     time_spent = datetime.timedelta()
     ten_prev = []
-    with open("plane_cache.json", "r") as plane_cache_f:
-        plane_cache = json.load(plane_cache_f)
+    if os.path.exists(CACHE_PATH):
+        with open(CACHE_PATH, "r") as plane_cache_f:
+            plane_cache = json.load(plane_cache_f)
+    else:
+        plane_cache = {}
 
 
-    loader = load_shapenet(debug=False, data_folder="data/ShapeNetParts")
+    loader = load_shapenet(debug=False, data_folder="data/ShapeNetCore")
     executor = ThreadPoolExecutor()
     futures = []
     while True:
@@ -74,7 +78,7 @@ if __name__ == "__main__":
                     with dict_lock:
                         json.dump(plane_cache, plane_cache_f)
                     
-                os.replace("tmp.json", "plane_cache.json")
+                os.replace("tmp.json", CACHE_PATH)
 
 
     wait(futures)
@@ -82,4 +86,4 @@ if __name__ == "__main__":
         with dict_lock:
             json.dump(plane_cache, plane_cache_f)
                     
-    os.replace("tmp.json", "plane_cache.json")
+    os.replace("tmp.json", CACHE_PATH)

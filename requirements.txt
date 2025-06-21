@@ -1,12 +1,4 @@
 matplotlib==3.10.1
 numpy==2.2.4
 open3d==0.19.0
-torch==2.6.0+cu118
-torchvision==0.21.0+cu118
 trimesh==4.6.2
-~==acd_modified
-~oacd_modified==1.0.5
-~oacd_modified==1.0
-~orch==2.5.1+cu118
-~orch==2.5.1
-~~acd_modified==1.0

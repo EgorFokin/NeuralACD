@@ -1,0 +1,24 @@
+name: neural_acd
+channels:
+  - pytorch
+  - conda-forge
+  - nvidia
+dependencies:
+  - python=3.10
+  - pytorch::pytorch
+  - pytorch::torchvision
+  - pytorch::torchaudio
+  - pytorch-cuda
+  - mkl=2023.1
+  - matplotlib
+  - numpy
+  - open3d
+  - trimesh
+  - tqdm
+  - h5py
+  - pytorch-lightning
+  - jupyterlab
+  - notebook
+  - ipykernel
+  - tensorboard
+  - pandas

@@ -11,7 +11,8 @@ import warnings
 import numpy as np
 import open3d as o3d
 import random
-
+from decompose import decompose
+import coacd_modified
 
 from pathlib import Path
 from utils.BaseUtils import *
@@ -21,7 +22,7 @@ ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'model'))
 
 #import model_cpu as model
-import model
+import model.test_model as model
 
 warnings.filterwarnings('ignore')
 
@@ -34,23 +35,25 @@ torch.cuda.manual_seed(0)
 np.random.seed(0)
 torch.backends.cudnn.deterministic = True
 
-
-LR = 1e-04
+coacd_modified.set_log_level("off")
+LR = 1e-03
 DECAY = 1e-4
 DECAY_STEP = 10
 LR_DECAY = 0.7
-EPOCHS = 1000
+EPOCHS = 2000
 
 LEARNING_RATE_CLIP = 1e-5
 MOMENTUM_ORIGINAL = 0.1
 MOMENTUM_DECCAY = 0.5
 MOMENTUM_DECCAY_STEP = DECAY_STEP
 
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 
-#WEIGHTS_PATH = "models/best_model.pth"
+#WEIGHTS_PATH = "log/2025-06-19_23-20/checkpoints/checkpoint.pth"
 
         
+ROTATION = True
+LIMIT = 50
 
 
 def save_checkpoint(state, is_best, checkpoint, filename='checkpoint.pth'):
@@ -61,6 +64,7 @@ def save_checkpoint(state, is_best, checkpoint, filename='checkpoint.pth'):
 
 def load_point_clouds(data_folder,plane_cache,batch_size):
     batch = [[],[]]
+    i = 0
     for root, _, files in os.walk(data_folder): 
         for file in files:
             if file.endswith(".npy"):
@@ -77,7 +81,7 @@ def load_point_clouds(data_folder,plane_cache,batch_size):
                         continue
 
                     
-                    if random.random() < 0.75:
+                    if ROTATION and random.random() < 0.75:
                         rotation = o3d.geometry.get_rotation_matrix_from_xyz(np.random.rand(3) * 2 * np.pi)
                     else:
                         rotation = np.eye(3)
@@ -99,10 +103,31 @@ def load_point_clouds(data_folder,plane_cache,batch_size):
                         points = torch.tensor(np.array(batch[0]), dtype=torch.float32).cuda()
                         target = torch.tensor(np.array(batch[1]), dtype=torch.float32).cuda()
                         yield points, target
+                        i+=1
+                        if i>= LIMIT:
+                            return
                         batch = [[],[]]
 
 
-                
+# def get_concavity(predictor, data_folder):
+#     total_concavity = 0
+#     total_parts = 0
+#     num_meshes = 0
+#     MAX_MESHES = 10
+#     for root, _, files in os.walk(data_folder): 
+#         for file in files:
+#             if file.endswith(".obj"):
+#                 mesh = o3d.io.read_triangle_mesh(os.path.join(root, file))
+#                 if len(mesh.vertices) > 10000:
+#                     continue
+#                 print(file)
+#                 parts,_,concavity = decompose(mesh,5, predictor)
+#                 total_concavity += concavity
+#                 total_parts += len(parts)
+#                 num_meshes += 1
+#                 if num_meshes >= MAX_MESHES:
+#                     return (total_concavity / num_meshes, total_parts / num_meshes)
+#     return (total_concavity / num_meshes, total_parts / num_meshes)
 
 def main():
     def log_string(str):
@@ -132,7 +157,6 @@ def main():
     num_output = 4
 
     shutil.copy('model/model.py', str(exp_dir))
-    shutil.copy('model/pointnet2_utils.py', str(exp_dir))
 
     with open("plane_cache.json", "r") as plane_cache_f:
         plane_cache = json.load(plane_cache_f)
@@ -160,11 +184,7 @@ def main():
         log_string(f"Failed to load model from checkpoint: {e}")
 
 
-    
 
-    def bn_momentum_adjust(m, momentum):
-        if isinstance(m, torch.nn.BatchNorm2d) or isinstance(m, torch.nn.BatchNorm1d):
-            m.momentum = momentum
 
     
 
@@ -173,23 +193,24 @@ def main():
     best_loss = float('inf')
     loss_list = []
     val_loss_list = []
+    convavity_list = []
 
     for epoch in range(start_epoch, EPOCHS):
 
         log_string('Epoch %d (%d/%s):' %
                    (epoch + 1, epoch + 1, EPOCHS))
-        lr = max(LR * (LR_DECAY **
-                 (epoch // DECAY_STEP)), LEARNING_RATE_CLIP)
-        log_string('Learning rate:%f' % lr)
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = lr
-        momentum = MOMENTUM_ORIGINAL * \
-            (MOMENTUM_DECCAY ** (epoch // MOMENTUM_DECCAY_STEP))
-        if momentum < 0.01:
-            momentum = 0.01
-        log_string('BN momentum updated to: %f' % momentum)
-        predictor = predictor.apply(
-            lambda x: bn_momentum_adjust(x, momentum))
+        # lr = max(LR * (LR_DECAY **
+        #          (epoch // DECAY_STEP)), LEARNING_RATE_CLIP)
+        # log_string('Learning rate:%f' % lr)
+        # for param_group in optimizer.param_groups:
+        #     param_group['lr'] = lr
+        # momentum = MOMENTUM_ORIGINAL * \
+        #     (MOMENTUM_DECCAY ** (epoch // MOMENTUM_DECCAY_STEP))
+        # if momentum < 0.01:
+        #     momentum = 0.01
+        # log_string('BN momentum updated to: %f' % momentum)
+        # predictor = predictor.apply(
+        #     lambda x: bn_momentum_adjust(x, momentum))
         predictor = predictor.train()
 
         i = 0
@@ -227,6 +248,9 @@ def main():
             l =  loss.item()
             running_tloss += l
             loss_list.append(l)
+
+
+            
             log_string(f"Training time: { datetime.datetime.now()-start_time}")
             log_string(f'Training loss: {running_tloss/(i+1)}')
             i+=1
@@ -242,7 +266,7 @@ def main():
         i = 0
         with torch.no_grad():
 
-            for batch in load_point_clouds("data/ShapeNetPointCloud_val", plane_cache, BATCH_SIZE):
+            for batch in load_point_clouds("data/ShapeNetPointCloudVal", plane_cache, BATCH_SIZE):
 
                 points,target = batch
 
@@ -259,23 +283,29 @@ def main():
                 running_vloss += l
                 val_loss_list.append(l)
                 i+=1
-                log_string(f"{i*BATCH_SIZE} val meshes processed")
+                log_string(f"{i*32} val meshes processed")
+
         
 
-        log_string(f'Validation loss: { running_vloss/i}')
+        # log_string(f'Validation loss: { running_vloss/i}')
         best = False
         if running_vloss < best_loss:
             best_loss = running_vloss
             best = True
 
-        with open(str(exp_dir) + '/history.json', 'w') as f:
-            json.dump({'train': loss_list, 'val': val_loss_list}, f)
+        
 
         save_checkpoint({
             'epoch': epoch + 1,
             'model_state_dict': predictor.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
         }, best, str(exp_dir) + '/checkpoints/', 'checkpoint.pth')
+
+        # convavity = get_concavity(predictor, "data/ShapeNetMeshes")
+        # convavity_list.append(convavity)
+
+        with open(str(exp_dir) + '/history.json', 'w') as f:
+            json.dump({'train': loss_list, 'val': val_loss_list, 'concavity': convavity_list}, f)
 
 
 if __name__ == '__main__':

@@ -24,7 +24,8 @@ if __name__ == "__main__":
                 for root,dirs,files in os.walk("tmp"):
                     for file in files:
                         if file.endswith(".obj"):
-                            shutil.move(os.path.join(root,file), os.path.join("data","ShapenetRedistributed",str(random.randint(0,9)),root.split('\\')[-2] + ".obj"))
+                            name =root.split(os.path.sep)[-2] + ".obj"
+                            shutil.move(os.path.join(root,file), os.path.join("data","ShapenetRedistributed", str(random.randint(0,9)),name))
 
 
     empty_tmp()

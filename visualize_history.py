@@ -2,11 +2,10 @@ import json
 import matplotlib.pyplot as plt
 import numpy as np
 
-TRAIN_SIZE = 46240//32
-VAL_SIZE = 5152//32
+TRAIN_SIZE = 50#677
+VAL_SIZE = 50#76
 
-# I didn't train the model in one go, so we need to combine the history of all the runs
-versions = ["2025-03-10_15-39","2025-03-11_11-48", "2025-03-11_12-00", "2025-03-13_09-05","2025-03-13_15-15", "2025-03-14_11-55"]    
+versions = ["2025-06-20_22-43"]    
 
 history = {"train":[], "val":[]}
 
@@ -24,6 +23,11 @@ means_val = []
 for i in range(epochs):
     means_train.append(np.mean(history["train"][i*TRAIN_SIZE:(i+1)*TRAIN_SIZE]))
     means_val.append(np.mean(history["val"][i*VAL_SIZE:(i+1)*VAL_SIZE]))
+
+# means_train = means_train[60:]
+# means_val = means_val[60:]
+
+plt.ylim(top=2) 
 
 plt.plot(means_train, label="train")
 plt.plot(means_val, label="val")

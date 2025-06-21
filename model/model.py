@@ -89,6 +89,8 @@ class get_model(nn.Module):
 
         for module in self.SA_modules:
             xyz, features = module(xyz, features)
+        
+        print(xyz.shape, features.shape)
 
         return self.fc_layer(features.squeeze(-1))
 
