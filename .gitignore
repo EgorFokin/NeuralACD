@@ -1,8 +1,10 @@
 __pycache__/
-data/*
+data/ShapeNet*
 tmp/
 test/
 log/
-*.obj
+checkpoints/
+logs/
+./*.obj
 *.mtl
 *.blend
