@@ -2,11 +2,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Load the logged metrics
-metrics = pd.read_csv("logs/my_model/version_5/metrics.csv")
+metrics = pd.read_csv("metrics.csv")
 
 # Filter and plot
 train_loss = metrics[metrics["train_loss_epoch"].notna()]
 val_loss = metrics[metrics["val_loss"].notna()]
+
+print("Min validation loss:",min(val_loss["val_loss"]))
 
 plt.ylim(0,2)
 
