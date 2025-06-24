@@ -1,13 +1,19 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from decompose import decompose
 import datetime
-import os
+import coacd_modified
+
 import open3d as o3d
 import numpy as np
 
 if __name__ == "__main__":
-    VHACD = "data\\v_hacd"
+    VHACD = "data/v-hacd-data/data"
     DEPTH = 5
     RANDOM_ROTATION = False
+    coacd_modified.set_log_level("off")
     start_time = datetime.datetime.now()
     num_parts = 0
     concavity = 0

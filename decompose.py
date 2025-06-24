@@ -2,7 +2,7 @@ import torch
 import open3d as o3d
 import coacd_modified
 import numpy as np
-from model import model
+from model.model import PlaneEstimationModel
 import random
 from concurrent.futures import ThreadPoolExecutor,ProcessPoolExecutor
 import datetime
@@ -13,8 +13,11 @@ import copy
 import shutil
 
 
-MODEL_PATH =  "model/best_model.pth"
+MODEL_PATH =  "checkpoints/best-model-epoch=1509-val_loss=0.22.ckpt"
 #np.random.seed(0)
+
+predictor_best = PlaneEstimationModel.load_from_checkpoint("checkpoints/best-model-epoch=1509-val_loss=0.22.ckpt")
+predictor_best.eval()
 
 
 
@@ -69,9 +72,7 @@ def normalize_planes(planes):
         plane_d = plane[3]
 
         plane_abc = plane_abc / torch.norm(plane_abc)
-        plane_abc[0] = 0
-        plane_abc[1] = 0
-        plane_abc[2] = 1
+
         plane = torch.cat([plane_abc, plane_d.view(1)])
         plane = coacd_modified.CoACD_Plane(*list(plane.cpu().numpy()),0)
         new_planes.append(plane)
@@ -145,7 +146,7 @@ def get_convex_hulls(meshes):
 
 
 
-def decompose(mesh,depth,predictor,min_part_size=40): 
+def decompose(mesh,depth,predictor=predictor_best,min_part_size=40): 
     #o3d.io.write_triangle_mesh("input_mesh.ply", mesh)   
 
     parts = [mesh]        
@@ -168,7 +169,9 @@ def decompose(mesh,depth,predictor,min_part_size=40):
         clouds = torch.tensor(clouds, dtype=torch.float32).cuda()
 
         with torch.no_grad():
-            planes = predictor(clouds)
+            pred = predictor(clouds)
+            pred_d = -torch.sum(pred[:, 1, :] * pred[:, 0, :], dim=1)
+            planes = torch.cat([pred[:, 0, :],pred_d.unsqueeze(1)], dim=1)
 
             planes = normalize_planes(planes)
 
@@ -200,7 +203,7 @@ if __name__ == "__main__":
         print("Please provide a mesh file")
         exit(0)
 
-    coacd_modified.set_log_level("debug")
+    coacd_modified.set_log_level("off")
     
     filename = sys.argv[1]
 
@@ -210,12 +213,8 @@ if __name__ == "__main__":
         depth = 5
         print("Using default depth of 5")
 
-    predictor = model.get_model(4).cuda()
-
-    predictor.load_state_dict(torch.load(MODEL_PATH)['model_state_dict'])
-
     mesh = o3d.io.read_triangle_mesh(filename)
-    parts,hulls,avg_concavity = decompose(mesh,depth,predictor)
+    parts,hulls,avg_concavity = decompose(mesh,depth)
     print("avg concavity: ",avg_concavity)
     print("number of parts: ",len(parts))
 
