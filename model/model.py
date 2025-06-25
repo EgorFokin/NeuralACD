@@ -21,44 +21,31 @@ class PlaneEstimationModel(pl.LightningModule):
         channel = 3
         self.feat = PointNetEncoder(args, global_feat=True, feature_transform=True, channel=channel)
 
-        self.fc1 = VNLinearLeakyReLU(682, 1024, dim=3, negative_slope=0.0)
-        self.fc2 = VNLinearLeakyReLU(1024, 512, dim=3, negative_slope=0.0)
+        self.fc1 = VNLinearLeakyReLU(682, 512, dim=3, negative_slope=0.0)
+        # self.fc2 = VNLinearLeakyReLU(1024, 512, dim=3, negative_slope=0.0)
         self.fc3 = VNLinearLeakyReLU(512, 256, dim=3, negative_slope=0.0)
         self.fc4 = VNLinearLeakyReLU(256, 64, dim=3, negative_slope=0.0)
         self.fc5 = VNLinearLeakyReLU(64, 16, dim=3, negative_slope=0.0)
-        self.fc6 = VNLinear(16, 2)
+        self.fc6 = VNLinear(16, 1)
         
         self.learning_rate = learning_rate
         
     def forward(self, x):
         x, trans, trans_feat = self.feat(x)
         x = self.fc1(x)
-        x = self.fc2(x)
+        #x = self.fc2(x)
         x = self.fc3(x)
         x = self.fc4(x)
         x = self.fc5(x)
+        x = self.fc6(x)
         return x
     
     def compute_loss(self, pred, target):
-        # Distance term
-        pred_d = -torch.sum(pred[:, 1, :] * pred[:, 0, :], dim=1)
-        diff = target[..., 3] - pred_d.unsqueeze(1)
-        squared_loss = diff**2
+        pred = pred.squeeze(1)
         
-        # Normal direction term
-        pred_dir = pred[:, 0, :]
-        target_dir = target[..., :3]
-        pred_dir_norm = F.normalize(pred_dir, dim=-1)
-        target_dir_norm = F.normalize(target_dir, dim=-1)
-        cosine_sim = torch.matmul(pred_dir_norm.unsqueeze(1), target_dir_norm.transpose(-1, -2)).squeeze(1)
-        cosine = 1 - cosine_sim
+        loss = F.mse_loss(pred, target)
         
-        # Combined loss
-        loss = squared_loss + cosine
-        min_loss, _ = loss.min(dim=1)
-        normalization_loss = torch.abs((1 - torch.norm(pred_dir, dim=-1)))
-        
-        return min_loss.mean() + normalization_loss.mean()
+        return loss
     
     def training_step(self, batch, batch_idx):
         x, y = batch

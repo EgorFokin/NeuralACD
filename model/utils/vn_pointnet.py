@@ -51,10 +51,10 @@ class PointNetEncoder(nn.Module):
         
         self.conv_pos = VNLinearLeakyReLU(3, 64//3, dim=5, negative_slope=0.0)
         self.conv1 = VNLinearLeakyReLU(64//3, 64//3, dim=4, negative_slope=0.0)
-        self.conv2 = VNLinearLeakyReLU(64//3*2, 128//3, dim=4, negative_slope=0.0)
+        self.conv2 = VNLinearLeakyReLU(42, 42, dim=4, negative_slope=0.0)
         
-        self.conv3 = VNLinear(128//3, 1024//3)
-        self.bn3 = VNBatchNorm(1024//3, dim=4)
+        self.conv3 = VNLinear(42, 341)
+        self.bn3 = VNBatchNorm(341, dim=4)
         
         self.std_feature = VNStdFeature(1024//3*2, dim=4, normalize_frame=False, negative_slope=0.0)
         
@@ -74,7 +74,9 @@ class PointNetEncoder(nn.Module):
     def forward(self, x):
         B, D, N = x.size()
 
+        
         x = x.unsqueeze(1)
+
         feat = get_graph_feature_cross(x, k=self.n_knn)
         x = self.conv_pos(feat)
         x = self.pool(x)
@@ -92,16 +94,9 @@ class PointNetEncoder(nn.Module):
         
         x_mean = x.mean(dim=-1, keepdim=True).expand(x.size())
         x = torch.cat((x, x_mean), 1)
-
     
         x = self.pool2(x)
 
-        
         trans_feat = None
         trans = None
-        if self.global_feat:
-            return x, trans, trans_feat
-        else:
-            
-            x = x.view(-1, 1023, 1).repeat(1, 1, N)
-            return torch.cat([x, pointfeat], 1), trans, trans_feat
+        return x, trans, trans_feat

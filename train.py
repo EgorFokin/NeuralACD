@@ -53,26 +53,34 @@ class NeuralACDDataset(Dataset):
     
     def __getitem__(self, idx):
         points = self.data[idx]
-        mesh_hash = self.hashes[idx].decode('utf-8')
-        planes = self.labels[mesh_hash]
+        # mesh_hash = self.hashes[idx].decode('utf-8')
+        # planes = self.labels[mesh_hash]
 
-        if self.rotate and random.random() < 0.75:
-            rotation = o3d.geometry.get_rotation_matrix_from_xyz(np.random.rand(3) * 2 * np.pi)
-        else:
-            rotation = np.eye(3)
+        # if self.rotate and random.random() < 0.75:
+        #     rotation = o3d.geometry.get_rotation_matrix_from_xyz(np.random.rand(3) * 2 * np.pi)
+        # else:
+        #     rotation = np.eye(3)
 
-        points = np.dot(points, rotation[:3,:3].T)
+        # points = np.dot(points, rotation[:3,:3].T)
+
+        # rotation = o3d.geometry.get_rotation_matrix_from_xyz(np.random.rand(3) * 2 * np.pi)
+
+        # points = np.dot(points, rotation[:3,:3].T)
 
         points = points.transpose(1, 0)
 
-        planes = [apply_rotation_to_plane(*plane[:4],rotation) for plane in planes]
-        planes = np.array(planes)
-        return points.astype('float32'),planes.astype('float32')
+        # planes = [apply_rotation_to_plane(*plane[:4],rotation) for plane in planes]
+        # planes = np.array(planes)
+        label = np.array([1,0,0])
+        # label = np.dot(label, rotation[:3,:3].T)
+
+
+        return points.astype('float32'),label.astype('float32')
 
 train_dataset = NeuralACDDataset("data/train_data.h5","data/plane_cache.json")
 val_dataset = NeuralACDDataset("data/val_data.h5","data/plane_cache.json")
 
-train_dataset = Subset(train_dataset, indices=list(range(3200)))
+train_dataset = Subset(train_dataset, indices=list(range(64)))
 
 train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=11)
 val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False,  num_workers=11)
@@ -99,7 +107,7 @@ trainer = pl.Trainer(
         callbacks=callbacks,
         max_epochs=2000,
         log_every_n_steps=100,
-        check_val_every_n_epoch=10,
+        check_val_every_n_epoch=100000,
         logger=logger,
     )
 
