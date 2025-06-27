@@ -6,3 +6,5 @@ log/
 *.obj
 *.mtl
 *.blend
+/logs
+/checkpoints

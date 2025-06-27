@@ -62,8 +62,7 @@ class get_model(nn.Module):
             nn.LeakyReLU(True),
             nn.Linear(512, 256),
             nn.LeakyReLU(True),
-            nn.Linear(256, self.num_outputs),
-            nn.Tanh()
+            nn.Linear(256, self.num_outputs)
         )
 
     def _break_up_pc(self, pc):
@@ -90,7 +89,6 @@ class get_model(nn.Module):
         for module in self.SA_modules:
             xyz, features = module(xyz, features)
         
-        print(xyz.shape, features.shape)
 
         return self.fc_layer(features.squeeze(-1))
 
@@ -100,42 +98,8 @@ class get_loss(nn.Module):
         super(get_loss, self).__init__()
 
     def forward(self, pred, target):
-
-
-            #target_norm[..., 3] = target_norm[..., 3] * 2 - 1 # d is always positive, so we need to convert it to the range [-1, 1]
-
-
-            #distance to the closest plane
-            loss_fn = nn.MSELoss(reduction='none')  # Compute element-wise MSE
-
-            # Compute MSE loss for all target planes
-            loss = loss_fn(pred.unsqueeze(1), target)  # Shape: (B, M, 4)
-
-            # Sum over the last dimension (MSE is applied to 4D vectors)
-            mse = loss.mean(dim=-1)  # Shape: (B, M)
-
-
-            #compare normal directions
-            pred_dir = pred[..., :3]  # Shape: (B, 3)
-            target_dir = target[..., :3]  # Shape: (B, M, 3)
-
-            # Normalize the direction vectors to compare only their directions
-            pred_dir_norm = F.normalize(pred_dir, dim=-1)  # Shape: (B, 3)
-            target_dir_norm = F.normalize(target_dir, dim=-1)  # Shape: (B, M, 3)
-
-            # Compute cosine similarity (higher means better alignment)
-            cosine_sim = torch.matmul(pred_dir_norm.unsqueeze(1), target_dir_norm.transpose(-1, -2)).squeeze(1)  # Shape: (B, M)
-
-            # Convert similarity to loss (1 - similarity, so lower is better)
-            cosine = 1 - cosine_sim  # Shape: (B, M)
-
-            
-
-            loss = mse + 0.5*cosine
-
-            # Take the minimum loss over the M target planes
-            min_loss, _ = loss.min(dim=1)  # Shape: (B,)
-            normalization_loss = torch.abs((1 - torch.norm(pred_dir, dim=-1)))
-
-
-            return min_loss.mean() + normalization_loss.mean()
+        pred = pred.squeeze(1)
+        
+        loss = F.mse_loss(pred, target)
+        
+        return loss

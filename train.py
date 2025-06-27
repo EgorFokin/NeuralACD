@@ -22,7 +22,7 @@ ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'model'))
 
 #import model_cpu as model
-import model.test_model as model
+import model.model as model
 
 warnings.filterwarnings('ignore')
 
@@ -47,13 +47,13 @@ MOMENTUM_ORIGINAL = 0.1
 MOMENTUM_DECCAY = 0.5
 MOMENTUM_DECCAY_STEP = DECAY_STEP
 
-BATCH_SIZE = 64
+BATCH_SIZE = 32
 
 #WEIGHTS_PATH = "log/2025-06-19_23-20/checkpoints/checkpoint.pth"
 
         
 ROTATION = True
-LIMIT = 50
+LIMIT = 10
 
 
 def save_checkpoint(state, is_best, checkpoint, filename='checkpoint.pth'):
@@ -74,11 +74,11 @@ def load_point_clouds(data_folder,plane_cache,batch_size):
                     except Exception as e:
                         print(file,e)
                         continue
-                    mesh_hash = file.split(".")[0]
-                    if mesh_hash in plane_cache and len(plane_cache[mesh_hash]) == 5:
-                        planes = plane_cache[mesh_hash]
-                    else:
-                        continue
+                    #mesh_hash = file.split(".")[0]
+                    # if mesh_hash in plane_cache and len(plane_cache[mesh_hash]) == 5:
+                    #     planes = plane_cache[mesh_hash]
+                    # else:
+                    #     continue
 
                     
                     if ROTATION and random.random() < 0.75:
@@ -88,16 +88,19 @@ def load_point_clouds(data_folder,plane_cache,batch_size):
 
                     points = np.dot(points, rotation[:3,:3].T)
 
-                    try:
-                        planes = [apply_rotation_to_plane(*plane[:4],rotation) for plane in planes]
-                    except Exception as e:
-                        print(file,e)
-                        continue
+                    direction = np.array([1,0,0])
+                    direction = np.dot(direction, rotation[:3,:3].T)
 
-                    if torch.isnan(torch.tensor(points)).any() or torch.isnan(torch.tensor(planes)).any():
-                        continue
+                    # try:
+                    #     planes = [apply_rotation_to_plane(*plane[:4],rotation) for plane in planes]
+                    # except Exception as e:
+                    #     print(file,e)
+                    #     continue
+
+                    # if torch.isnan(torch.tensor(points)).any() or torch.isnan(torch.tensor(planes)).any():
+                    #     continue
                     batch[0].append(points)
-                    batch[1].append(planes)
+                    batch[1].append(direction)
                     if len(batch[0]) == batch_size:
 
                         points = torch.tensor(np.array(batch[0]), dtype=torch.float32).cuda()
@@ -154,7 +157,7 @@ def main():
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 
-    num_output = 4
+    num_output = 3
 
     shutil.copy('model/model.py', str(exp_dir))
 
@@ -259,47 +262,47 @@ def main():
             processing_start = datetime.datetime.now()
 
 
-        #validation
-        log_string("Running validation...")
-        predictor = predictor.eval()
-        running_vloss = 0
-        i = 0
-        with torch.no_grad():
+        # #validation
+        # log_string("Running validation...")
+        # predictor = predictor.eval()
+        # running_vloss = 0
+        # i = 0
+        # with torch.no_grad():
 
-            for batch in load_point_clouds("data/ShapeNetPointCloudVal", plane_cache, BATCH_SIZE):
+        #     for batch in load_point_clouds("data/ShapeNetPointCloudVal", plane_cache, BATCH_SIZE):
 
-                points,target = batch
+        #         points,target = batch
 
-                if points is None:
-                    continue
+        #         if points is None:
+        #             continue
 
-                points = points.transpose(2, 1)
+        #         points = points.transpose(2, 1)
 
-                seg_pred = predictor(
-                    points)
+        #         seg_pred = predictor(
+        #             points)
                 
-                loss = criterion(seg_pred,target)
-                l = loss.item()
-                running_vloss += l
-                val_loss_list.append(l)
-                i+=1
-                log_string(f"{i*32} val meshes processed")
+        #         loss = criterion(seg_pred,target)
+        #         l = loss.item()
+        #         running_vloss += l
+        #         val_loss_list.append(l)
+        #         i+=1
+        #         log_string(f"{i*32} val meshes processed")
 
         
 
-        # log_string(f'Validation loss: { running_vloss/i}')
-        best = False
-        if running_vloss < best_loss:
-            best_loss = running_vloss
-            best = True
+        # # log_string(f'Validation loss: { running_vloss/i}')
+        # best = False
+        # if running_vloss < best_loss:
+        #     best_loss = running_vloss
+        #     best = True
 
         
 
-        save_checkpoint({
-            'epoch': epoch + 1,
-            'model_state_dict': predictor.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-        }, best, str(exp_dir) + '/checkpoints/', 'checkpoint.pth')
+        # save_checkpoint({
+        #     'epoch': epoch + 1,
+        #     'model_state_dict': predictor.state_dict(),
+        #     'optimizer_state_dict': optimizer.state_dict(),
+        # }, best, str(exp_dir) + '/checkpoints/', 'checkpoint.pth')
 
         # convavity = get_concavity(predictor, "data/ShapeNetMeshes")
         # convavity_list.append(convavity)
