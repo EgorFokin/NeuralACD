@@ -75,7 +75,7 @@ class NeuralACDDataset(Dataset):
         # label = np.dot(label, rotation[:3,:3].T)
 
 
-        return points.astype('float32'),label.astype('float32')
+        return points.astype('float32')
 
 train_dataset = NeuralACDDataset("data/train_data.h5","data/plane_cache.json")
 val_dataset = NeuralACDDataset("data/val_data.h5","data/plane_cache.json")

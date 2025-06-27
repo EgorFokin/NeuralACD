@@ -40,25 +40,36 @@ class PlaneEstimationModel(pl.LightningModule):
         x = self.fc6(x)
         return x
     
-    def compute_loss(self, pred, target):
+    def compute_loss(self, pred):
         pred = pred.squeeze(1)
+        pred_abs = torch.abs(pred)
         
-        loss = F.mse_loss(pred, target)
-        
+        # pred_abs: [B, 3]
+        unit_vectors = torch.eye(3, dtype=pred_abs.dtype, device=pred_abs.device)  # [3, 3]
+        # Expand to [B, 3, 3] for broadcasting
+        targets = unit_vectors.unsqueeze(0).expand(pred_abs.size(0), -1, -1)  # [B, 3, 3]
+        preds = pred_abs.unsqueeze(1).expand(-1, 3, -1)  # [B, 3, 3]
+
+        # Compute per-sample loss to each unit vector
+        mse = F.mse_loss(preds, targets, reduction='none').mean(dim=2)  # [B, 3]
+
+        # Pick minimum loss per sample
+        loss = mse.min(dim=1).values.mean()  # scalar loss over batch
+
         return loss
     
     def training_step(self, batch, batch_idx):
-        x, y = batch
+        x = batch
         pred = self(x)
-        loss = self.compute_loss(pred, y)
+        loss = self.compute_loss(pred)
         
         self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
         return loss
     
     def validation_step(self, batch, batch_idx):
-        x, y = batch
+        x = batch
         pred = self(x)
-        loss = self.compute_loss(pred, y)
+        loss = self.compute_loss(pred)
         
         self.log('val_loss', loss, prog_bar=True, on_epoch=True)
         return loss

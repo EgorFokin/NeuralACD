@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Load the logged metrics
-metrics = pd.read_csv("logs/my_model/version_54/metrics.csv")
+metrics = pd.read_csv("logs/my_model/version_81/metrics.csv")
 
 # Filter and plot
 train_loss = metrics[metrics["train_loss_epoch"].notna()]
