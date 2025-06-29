@@ -21,8 +21,10 @@ class PlaneEstimationModel(pl.LightningModule):
         channel = 3
         self.feat = PointNetEncoder(args, global_feat=True, feature_transform=True, channel=channel)
 
-        self.fc1 = VNLinearLeakyReLU(682, 512, dim=3, negative_slope=0.0)
-        # self.fc2 = VNLinearLeakyReLU(1024, 512, dim=3, negative_slope=0.0)
+        self.fc1 = VNLinearLeakyReLU(682, 1024, dim=3, negative_slope=0.0)
+        self.fc_extra1 = VNLinearLeakyReLU(1024, 1024, dim=3, negative_slope=0.0)
+        self.fc2 = VNLinearLeakyReLU(1024, 512, dim=3, negative_slope=0.0)
+        self.fc_extra2 = VNLinearLeakyReLU(512, 512, dim=3, negative_slope=0.0)
         self.fc3 = VNLinearLeakyReLU(512, 256, dim=3, negative_slope=0.0)
         self.fc4 = VNLinearLeakyReLU(256, 64, dim=3, negative_slope=0.0)
         self.fc5 = VNLinearLeakyReLU(64, 16, dim=3, negative_slope=0.0)
@@ -33,7 +35,9 @@ class PlaneEstimationModel(pl.LightningModule):
     def forward(self, x):
         x, trans, trans_feat = self.feat(x)
         x = self.fc1(x)
-        #x = self.fc2(x)
+        x = self.fc_extra1(x)
+        x = self.fc2(x)
+        x = self.fc_extra2(x)
         x = self.fc3(x)
         x = self.fc4(x)
         x = self.fc5(x)

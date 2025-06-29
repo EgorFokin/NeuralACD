@@ -80,10 +80,10 @@ class NeuralACDDataset(Dataset):
 train_dataset = NeuralACDDataset("data/train_data.h5","data/plane_cache.json")
 val_dataset = NeuralACDDataset("data/val_data.h5","data/plane_cache.json")
 
-train_dataset = Subset(train_dataset, indices=list(range(320)))
+#train_dataset = Subset(train_dataset, indices=list(range(320)))
 
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=11)
-val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False,  num_workers=11)
+train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True, num_workers=11)
+val_loader = DataLoader(val_dataset, batch_size=256, shuffle=False,  num_workers=11)
 
 
 pl.seed_everything(42)
