@@ -42,8 +42,12 @@ class PlaneEstimationModel(pl.LightningModule):
     
     def compute_loss(self, pred, target):
         pred = pred.squeeze(1)
-        
-        loss = F.mse_loss(pred, target)
+
+        #loss = F.mse_loss(pred, target)
+        cosine_sim = F.cosine_similarity(pred, target, dim=-1)
+        cosine_sim_neg = F.cosine_similarity(pred, -target, dim=-1)
+        max_sim = torch.max(cosine_sim, cosine_sim_neg)
+        loss = 1 - max_sim.mean()
         
         return loss
     
@@ -53,6 +57,7 @@ class PlaneEstimationModel(pl.LightningModule):
         loss = self.compute_loss(pred, y)
         
         self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
+        self.log('lr', self.trainer.optimizers[0].param_groups[0]['lr'], on_step=False,prog_bar=True, on_epoch=True)
         return loss
     
     def validation_step(self, batch, batch_idx):

@@ -71,7 +71,7 @@ class NeuralACDDataset(Dataset):
 
         # planes = [apply_rotation_to_plane(*plane[:4],rotation) for plane in planes]
         # planes = np.array(planes)
-        label = np.array([1,0,0])
+        label = np.array([0,1,0])
         # label = np.dot(label, rotation[:3,:3].T)
 
 
@@ -80,7 +80,7 @@ class NeuralACDDataset(Dataset):
 train_dataset = NeuralACDDataset("data/train_data.h5","data/plane_cache.json")
 val_dataset = NeuralACDDataset("data/val_data.h5","data/plane_cache.json")
 
-train_dataset = Subset(train_dataset, indices=list(range(64)))
+train_dataset = Subset(train_dataset, indices=list(range(320)))
 
 train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=11)
 val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False,  num_workers=11)
@@ -88,7 +88,7 @@ val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False,  num_workers=
 
 pl.seed_everything(42)
 
-model = PlaneEstimationModel(learning_rate=1e-2)
+model = PlaneEstimationModel(learning_rate=1e-3)
 
 
 callbacks = [
@@ -107,7 +107,7 @@ trainer = pl.Trainer(
         callbacks=callbacks,
         max_epochs=2000,
         log_every_n_steps=100,
-        check_val_every_n_epoch=100000,
+        check_val_every_n_epoch=100,
         logger=logger,
     )
 
