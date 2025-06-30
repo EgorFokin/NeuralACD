@@ -53,7 +53,7 @@ class PlaneEstimationModel(pl.LightningModule):
         # Second block with residual
         x2 = self.fc2(x)
         x2 = self.fc_extra2(x2)
-        res2 = self.res_fc2(x1)  # Project previous output to match dimensions
+        res2 = self.res_fc2(x)  # Project previous output to match dimensions
         x = self.post_residual_act2(x2 + res2)  # Residual connection with activation
         
         x = self.fc3(x)
@@ -69,7 +69,7 @@ class PlaneEstimationModel(pl.LightningModule):
         #loss = F.mse_loss(pred, target)
         cosine_sim = F.cosine_similarity(pred, target, dim=-1)
         cosine_sim_neg = F.cosine_similarity(pred, -target, dim=-1)
-        max_sim = torch.max(cosine_sim, cosine_sim_neg)
+        max_sim = torch.max(x1cosine_sim, cosine_sim_neg)
         loss = 1 - max_sim.mean()
         
         return loss
