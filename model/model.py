@@ -21,6 +21,7 @@ class PlaneEstimationModel(pl.LightningModule):
         channel = 3
         self.feat = PointNetEncoder(args, global_feat=True, feature_transform=True, channel=channel)
 
+        # Main network layers
         self.fc1 = VNLinearLeakyReLU(682, 1024, dim=3, negative_slope=0.0)
         self.fc_extra1 = VNLinearLeakyReLU(1024, 1024, dim=3, negative_slope=0.0)
         self.fc2 = VNLinearLeakyReLU(1024, 512, dim=3, negative_slope=0.0)
@@ -30,18 +31,38 @@ class PlaneEstimationModel(pl.LightningModule):
         self.fc5 = VNLinearLeakyReLU(64, 16, dim=3, negative_slope=0.0)
         self.fc6 = VNLinear(16, 1)
         
+        # Residual connection layers
+        self.res_fc1 = VNLinearLeakyReLU(682, 1024, dim=3, negative_slope=0.0)  # For fc1 to fc2
+        self.res_fc2 = VNLinearLeakyReLU(1024, 512, dim=3, negative_slope=0.0)   # For fc2 to fc3
+        self.res_fc3 = VNLinearLeakyReLU(512, 256, dim=3, negative_slope=0.0)     # For fc3 to fc4
+        
         self.learning_rate = learning_rate
         
     def forward(self, x):
         x, trans, trans_feat = self.feat(x)
-        x = self.fc1(x)
-        x = self.fc_extra1(x)
-        x = self.fc2(x)
-        x = self.fc_extra2(x)
-        x = self.fc3(x)
+        
+        # First block with residual
+        x1 = self.fc1(x)
+        x1 = self.fc_extra1(x1)
+        res1 = self.res_fc1(x)  # Project input to match dimensions
+        x = x1 + res1  # Residual connection
+        
+        # Second block with residual
+        x2 = self.fc2(x)
+        x2 = self.fc_extra2(x2)
+        res2 = self.res_fc2(x1)  # Project previous output to match dimensions
+        x = x2 + res2  # Residual connection
+        
+        # Third block with residual
+        x3 = self.fc3(x)
+        res3 = self.res_fc3(x2)  # Project previous output to match dimensions
+        x = x3 + res3  # Residual connection
+        
+        # Remaining layers without residuals
         x = self.fc4(x)
         x = self.fc5(x)
         x = self.fc6(x)
+        
         return x
     
     def compute_loss(self, pred, target):

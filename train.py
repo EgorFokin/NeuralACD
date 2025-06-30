@@ -107,7 +107,7 @@ trainer = pl.Trainer(
         callbacks=callbacks,
         max_epochs=2000,
         log_every_n_steps=100,
-        check_val_every_n_epoch=100,
+        check_val_every_n_epoch=5,
         logger=logger,
     )
 

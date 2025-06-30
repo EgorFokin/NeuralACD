@@ -8,7 +8,7 @@ metrics = pd.read_csv("metrics.csv")
 train_loss = metrics[metrics["train_loss_epoch"].notna()]
 val_loss = metrics[metrics["val_loss"].notna()]
 
-#print("Min validation loss:",min(val_loss["val_loss"]))
+print("Min validation loss:",min(val_loss["val_loss"]))
 
 plt.ylim(0,2)
 
