@@ -36,6 +36,9 @@ class PlaneEstimationModel(pl.LightningModule):
         self.res_fc2 = VNLinearLeakyReLU(1024, 512, dim=3, negative_slope=0.0)   # For fc2 to fc3
         self.res_fc3 = VNLinearLeakyReLU(512, 256, dim=3, negative_slope=0.0)     # For fc3 to fc4
         
+        # Non-linearity after residual addition
+        self.post_residual_act = VNLeakyReLU(negative_slope=0.0)
+        
         self.learning_rate = learning_rate
         
     def forward(self, x):
@@ -45,18 +48,18 @@ class PlaneEstimationModel(pl.LightningModule):
         x1 = self.fc1(x)
         x1 = self.fc_extra1(x1)
         res1 = self.res_fc1(x)  # Project input to match dimensions
-        x = x1 + res1  # Residual connection
+        x = self.post_residual_act(x1 + res1)  # Residual connection with activation
         
         # Second block with residual
         x2 = self.fc2(x)
         x2 = self.fc_extra2(x2)
         res2 = self.res_fc2(x1)  # Project previous output to match dimensions
-        x = x2 + res2  # Residual connection
+        x = self.post_residual_act(x2 + res2)  # Residual connection with activation
         
         # Third block with residual
         x3 = self.fc3(x)
         res3 = self.res_fc3(x2)  # Project previous output to match dimensions
-        x = x3 + res3  # Residual connection
+        x = self.post_residual_act(x3 + res3)  # Residual connection with activation
         
         # Remaining layers without residuals
         x = self.fc4(x)
