@@ -69,7 +69,7 @@ class PlaneEstimationModel(pl.LightningModule):
         #loss = F.mse_loss(pred, target)
         cosine_sim = F.cosine_similarity(pred, target, dim=-1)
         cosine_sim_neg = F.cosine_similarity(pred, -target, dim=-1)
-        max_sim = torch.max(x1cosine_sim, cosine_sim_neg)
+        max_sim = torch.max(cosine_sim, cosine_sim_neg)
         loss = 1 - max_sim.mean()
         
         return loss
