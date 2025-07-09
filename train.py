@@ -1,7 +1,7 @@
-from model.model import PlaneEstimationModel
+from model.model import ACDModel
 import h5py
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import IterableDataset, DataLoader
 import torch.nn as nn
 import json
 import open3d as o3d
@@ -11,93 +11,92 @@ import os
 from datetime import datetime
 import numpy as np
 from torch.utils.data import Subset
+import lib_acd_gen
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import CSVLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
-def apply_rotation_to_plane(a,b,c,d,rotation):
-    normal = np.array([a, b, c])
 
-    rotation = rotation[:3,:3]
-    
-    rotated_normal = rotation @ normal
+class ACDgen(IterableDataset):
+    def __init__(self):
+        pass
 
-    if np.linalg.norm(normal) == 0:
-        raise ValueError("Invalid plane normal (0,0,0).")
+    def get_distances(self, pcd_points,cut_points):
+        if len(cut_points) == 0:
+            return np.zeros(len(pcd_points), dtype=np.float32)
+        # Create a KD-tree from x
+        cut_pcd = o3d.geometry.PointCloud()
+        cut_pcd.points = o3d.utility.Vector3dVector(cut_points)
+        kdtree = o3d.geometry.KDTreeFlann(cut_pcd)
 
-    point_on_plane = -d * normal / np.linalg.norm(normal) ** 2 
-    rotated_point = rotation @ point_on_plane 
+        distances = []
 
-    d_new = -np.dot(rotated_normal, rotated_point)
+        for p in pcd_points:
+            _, idx, dist2 = kdtree.search_knn_vector_3d(p, 1)
+            distances.append(np.sqrt(dist2[0]))
 
-    if d_new < 0: #make the signs of coeffs consistent
-        rotated_normal = -rotated_normal
-        d_new = -d_new
-
-    return rotated_normal[0], rotated_normal[1], rotated_normal[2], d_new 
-
-class NeuralACDDataset(Dataset):
-    def __init__(self,pc_folder,planes_folder,rotate=True):
-        self.rotate =rotate
-        with h5py.File(pc_folder, 'r') as f:
-            self.data = f['point_clouds'][:]  # shape (N, 512, 3)
-            self.hashes = f['hashes'][:]
-        with open(planes_folder,'r') as f:
-            self.labels = json.load(f)
+        distances = np.array(distances)
+        
+        return distances
             
+    def __iter__(self):
+        num_spheres = random.randint(1, 20)
+        while True:
+            structure = lib_acd_gen.generate_sphere_structure(num_spheres)
+
+            verts = []
+            triangles = []
+            cut_verts = []
+            vertex_offset = 0
+            for mesh in structure:
+                verts.extend(mesh.vertices)
+                triangles.extend([[v0 + vertex_offset, v1 + vertex_offset, v2 + vertex_offset] for v0, v1, v2 in mesh.triangles])
+
+                vertex_offset += len(mesh.vertices)
+                cut_verts.extend(mesh.cut_verts)
             
-    
-    def __len__(self):
-        return len(self.data)
-    
-    def __getitem__(self, idx):
-        points = self.data[idx]
-        # mesh_hash = self.hashes[idx].decode('utf-8')
-        # planes = self.labels[mesh_hash]
+            o3d_mesh = o3d.geometry.TriangleMesh()
+            
+            #print(verts)
+            o3d_mesh.vertices = o3d.utility.Vector3dVector(verts)
+            o3d_mesh.triangles = o3d.utility.Vector3iVector(triangles)
 
-        # if self.rotate and random.random() < 0.75:
-        #     rotation = o3d.geometry.get_rotation_matrix_from_xyz(np.random.rand(3) * 2 * np.pi)
-        # else:
-        #     rotation = np.eye(3)
+            pcd = o3d_mesh.sample_points_uniformly(number_of_points=10000)
+            points = np.asarray(pcd.points)
+            distances = self.get_distances(points, cut_verts)
 
-        # points = np.dot(points, rotation[:3,:3].T)
+            points = torch.tensor(points, dtype=torch.float32)
+            distances = torch.tensor(distances, dtype=torch.float32)
+            distances = torch.clamp(distances, 0.0, 0.05)*20.0  # Scale distances to [0, 1] range
 
-        # rotation = o3d.geometry.get_rotation_matrix_from_xyz(np.random.rand(3) * 2 * np.pi)
+            yield points, distances
 
-        # points = np.dot(points, rotation[:3,:3].T)
-
-        points = points.transpose(1, 0)
-
-        # planes = [apply_rotation_to_plane(*plane[:4],rotation) for plane in planes]
-        # planes = np.array(planes)
-        label = np.array([0,1,0])
-        # label = np.dot(label, rotation[:3,:3].T)
-
-
-        return points.astype('float32'), label.astype('float32')
-
-train_dataset = NeuralACDDataset("data/train_data.h5","data/plane_cache.json")
-val_dataset = NeuralACDDataset("data/val_data.h5","data/plane_cache.json")
+dataset = ACDgen()
 
 #train_dataset = Subset(train_dataset, indices=list(range(320)))
 
-train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True, num_workers=11)
-val_loader = DataLoader(val_dataset, batch_size=256, shuffle=False,  num_workers=11)
+train_loader = DataLoader(dataset, batch_size=16, num_workers=11)
 
+sample = next(iter(train_loader))
+print("Sample points shape:", sample[0].shape)
+print("Sample distances shape:", sample[1].shape)
 
 pl.seed_everything(42)
+torch.set_float32_matmul_precision('high')
 
-model = PlaneEstimationModel(learning_rate=1e-3)
+model = ACDModel(learning_rate=1e-4)
+
 
 
 callbacks = [
-    ModelCheckpoint(monitor='val_loss',
-        dirpath='checkpoints/',
-        filename='best-model-{epoch:02d}-{val_loss:.2f}',
+    ModelCheckpoint(monitor='train_loss',
+        dirpath=f'checkpoints/{str(datetime.now().strftime("%d,%m,%Y-%H:%M:%S"))}/',
+        filename='best-model-{train_loss}',
         save_top_k=3,
-        mode='min'),
-    LearningRateMonitor()]
+        mode='min',
+        every_n_train_steps=100),
+        ]
 
 logger = CSVLogger("logs", name="my_model")
 
@@ -105,15 +104,12 @@ trainer = pl.Trainer(
         devices="auto",
         accelerator="auto",
         callbacks=callbacks,
-        max_epochs=2000,
-        log_every_n_steps=100,
-        check_val_every_n_epoch=5,
+        log_every_n_steps=10,
         logger=logger,
     )
 
 # Start Training
 trainer.fit(
     model=model,
-    train_dataloaders=train_loader,
-    val_dataloaders=val_loader
+    train_dataloaders=train_loader
 )

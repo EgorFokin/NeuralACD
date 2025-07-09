@@ -1,21 +1,28 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
+import os 
+
+versions = os.listdir("logs/my_model")
+versions = [int(v.split('_')[1]) for v in versions]
+
+max_version = max(versions)
+
 # Load the logged metrics
-metrics = pd.read_csv("metrics.csv")
+metrics = pd.read_csv(f"logs/my_model/version_{max_version}/metrics.csv")
 
 # Filter and plot
-train_loss = metrics[metrics["train_loss_epoch"].notna()]
-val_loss = metrics[metrics["val_loss"].notna()]
+train_loss = metrics[metrics["train_loss"].notna()]
+# val_loss = metrics[metrics["val_loss"].notna()]
 
-print("Min validation loss:",min(val_loss["val_loss"]))
+# print("Min validation loss:",min(val_loss["val_loss"]))
 
-plt.ylim(0,2)
+# plt.ylim(0,2)
 
-plt.plot(train_loss["epoch"], train_loss["train_loss_epoch"], label="Train Loss")
-plt.plot(val_loss["epoch"], val_loss["val_loss"], label="Val Loss")
-plt.xlabel("Epoch")
-plt.ylabel("Loss")
+plt.plot(train_loss["train_loss"], label="Train Loss")
+# plt.plot(val_loss["epoch"], val_loss["val_loss"], label="Val Loss")
+# plt.xlabel("step")
+# plt.ylabel("Loss")
 plt.legend()
 plt.title("Training and Validation Loss")
 plt.grid(True)
