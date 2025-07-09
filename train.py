@@ -43,7 +43,13 @@ class ACDgen(IterableDataset):
     def __iter__(self):
         num_spheres = random.randint(1, 20)
         while True:
-            structure = lib_acd_gen.generate_sphere_structure(num_spheres)
+
+            structure_type = random.choice(['sphere', 'cuboid'])
+            if structure_type == 'sphere':
+                structure = lib_acd_gen.generate_sphere_structure(num_spheres)
+            elif structure_type == 'cuboid':
+                structure = lib_acd_gen.generate_cuboid_structure(num_spheres)
+
 
             verts = []
             triangles = []
