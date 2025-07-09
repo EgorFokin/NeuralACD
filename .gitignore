@@ -8,3 +8,4 @@ logs/
 /*.obj
 *.mtl
 *.blend
+Pointnet2_PyTorch/
