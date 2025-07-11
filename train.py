@@ -101,7 +101,7 @@ dataset = ACDgen()
 
 #train_dataset = Subset(train_dataset, indices=list(range(320)))
 
-train_loader = DataLoader(dataset, batch_size=32, num_workers=8)
+train_loader = DataLoader(dataset, batch_size=32, num_workers=22)
 
 sample = next(iter(train_loader))
 print("Sample points shape:", sample[0].shape)
