@@ -68,7 +68,7 @@ class ACDgen(IterableDataset):
             o3d_mesh.vertices = o3d.utility.Vector3dVector(verts)
             o3d_mesh.triangles = o3d.utility.Vector3iVector(triangles)
 
-            pcd = o3d_mesh.sample_points_uniformly(number_of_points=10000)
+            pcd = o3d_mesh.sample_points_uniformly(number_of_points=40000)
             points = np.asarray(pcd.points)
             distances = self.get_distances(points, cut_verts)
 
@@ -82,7 +82,7 @@ dataset = ACDgen()
 
 #train_dataset = Subset(train_dataset, indices=list(range(320)))
 
-train_loader = DataLoader(dataset, batch_size=16, num_workers=11)
+train_loader = DataLoader(dataset, batch_size=128, num_workers=8)
 
 sample = next(iter(train_loader))
 print("Sample points shape:", sample[0].shape)
@@ -91,7 +91,7 @@ print("Sample distances shape:", sample[1].shape)
 pl.seed_everything(42)
 torch.set_float32_matmul_precision('high')
 
-model = ACDModel(learning_rate=1e-4)
+model = ACDModel(learning_rate=1e-3)
 
 
 
@@ -107,7 +107,7 @@ callbacks = [
 logger = CSVLogger("logs", name="my_model")
 
 trainer = pl.Trainer(
-        devices="auto",
+        devices=1,
         accelerator="auto",
         callbacks=callbacks,
         log_every_n_steps=10,

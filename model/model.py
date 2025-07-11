@@ -6,6 +6,7 @@ from model.utils.vn_layers import *
 from model.utils.vn_pointnet import PointNetEncoder
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from pointnet2_ops.pointnet2_modules import PointnetFPModule, PointnetSAModuleMSG
+from torch.optim.lr_scheduler import LambdaLR
 
 class ACDModel(pl.LightningModule):
     def __init__(self, learning_rate=1e-3, use_xyz=True):
@@ -132,4 +133,17 @@ class ACDModel(pl.LightningModule):
     
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
-        return [optimizer]
+        def lr_lambda(current_step):
+            # Decrease LR to 1% over 500 steps using exponential decay
+            decay_rate = 0.1 ** (1 / 500)
+            return decay_rate ** current_step
+
+        scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "step",
+                "frequency":1
+            }
+        }

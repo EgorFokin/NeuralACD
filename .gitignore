@@ -9,3 +9,4 @@ logs/
 *.mtl
 *.blend
 Pointnet2_PyTorch/
+lib_acd_gen.cpython*
