@@ -16,6 +16,7 @@ import lib_acd_gen
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import CSVLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+from pytorch_lightning.profilers import AdvancedProfiler
 
 
 class ACDgen(IterableDataset):
@@ -39,12 +40,28 @@ class ACDgen(IterableDataset):
         distances = np.array(distances)
         
         return distances
+    
+    def apply_gaussian_filter(self, pcd, sigma=0.02, radius = 0.05):
+        kdtree = o3d.geometry.KDTreeFlann(pcd)
+        points = np.asarray(pcd.points)
+        smoothed_points = np.zeros_like(points)
+
+        for i in range(len(points)):
+            [_, idxs, _] = kdtree.search_radius_vector_3d(pcd.points[i], radius)
+            neighbors = points[idxs]
+            distances = np.linalg.norm(neighbors - points[i], axis=1)
+            weights = np.exp(-distances**2 / (2 * sigma**2))
+            weights /= np.sum(weights)
+            smoothed_points[i] = np.sum(neighbors * weights[:, np.newaxis], axis=0)
+
+        pcd.points = o3d.utility.Vector3dVector(smoothed_points)
+
             
     def __iter__(self):
         num_spheres = random.randint(1, 20)
         while True:
 
-            structure_type = random.choice(['sphere', 'cuboid'])
+            structure_type = "sphere" #random.choice(['sphere', 'cuboid'])
             if structure_type == 'sphere':
                 structure = lib_acd_gen.generate_sphere_structure(num_spheres)
             elif structure_type == 'cuboid':
@@ -69,6 +86,8 @@ class ACDgen(IterableDataset):
             o3d_mesh.triangles = o3d.utility.Vector3iVector(triangles)
 
             pcd = o3d_mesh.sample_points_uniformly(number_of_points=40000)
+            if random.random() < 0.8: # 80% chance
+                self.apply_gaussian_filter(pcd)
             points = np.asarray(pcd.points)
             distances = self.get_distances(points, cut_verts)
 
@@ -93,7 +112,7 @@ torch.set_float32_matmul_precision('high')
 
 model = ACDModel(learning_rate=1e-3)
 
-
+profiler = AdvancedProfiler(dirpath="profiler_logs", filename=str(datetime.now().strftime("%d,%m,%Y-%H:%M:%S")))
 
 callbacks = [
     ModelCheckpoint(monitor='train_loss',
@@ -112,6 +131,8 @@ trainer = pl.Trainer(
         callbacks=callbacks,
         log_every_n_steps=10,
         logger=logger,
+        max_steps=2000,
+        #profiler=profiler,
     )
 
 # Start Training
