@@ -82,7 +82,7 @@ dataset = ACDgen()
 
 #train_dataset = Subset(train_dataset, indices=list(range(320)))
 
-train_loader = DataLoader(dataset, batch_size=128, num_workers=8)
+train_loader = DataLoader(dataset, batch_size=32, num_workers=8)
 
 sample = next(iter(train_loader))
 print("Sample points shape:", sample[0].shape)
@@ -101,7 +101,7 @@ callbacks = [
         filename='best-model-{train_loss}',
         save_top_k=3,
         mode='min',
-        every_n_train_steps=100),
+        every_n_train_steps=1),
         ]
 
 logger = CSVLogger("logs", name="my_model")
