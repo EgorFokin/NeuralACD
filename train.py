@@ -85,7 +85,7 @@ class ACDgen(IterableDataset):
             o3d_mesh.vertices = o3d.utility.Vector3dVector(verts)
             o3d_mesh.triangles = o3d.utility.Vector3iVector(triangles)
 
-            pcd = o3d_mesh.sample_points_uniformly(number_of_points=40000)
+            pcd = o3d_mesh.sample_points_uniformly(number_of_points=10000)
             if random.random() < 0.8: # 80% chance
                 self.apply_gaussian_filter(pcd)
             points = np.asarray(pcd.points)

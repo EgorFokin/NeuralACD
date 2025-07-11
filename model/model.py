@@ -20,7 +20,7 @@ class ACDModel(pl.LightningModule):
         c_in = 0
         self.SA_modules.append(
             PointnetSAModuleMSG(
-                npoint=10000,
+                npoint=2048,
                 radii=[0.03, 0.05],
                 nsamples=[16, 32],
                 mlps=[[c_in, 16, 16, 32], [c_in, 32, 32, 64]],
@@ -32,7 +32,7 @@ class ACDModel(pl.LightningModule):
         c_in = c_out_0
         self.SA_modules.append(
             PointnetSAModuleMSG(
-                npoint=2048,
+                npoint=512,
                 radii=[0.05, 0.1],
                 nsamples=[16, 32],
                 mlps=[[c_in, 64, 64, 128], [c_in, 64, 96, 128]],
@@ -44,7 +44,7 @@ class ACDModel(pl.LightningModule):
         c_in = c_out_1
         self.SA_modules.append(
             PointnetSAModuleMSG(
-                npoint=256,
+                npoint=128,
                 radii=[0.1, 0.25],
                 nsamples=[16, 32],
                 mlps=[[c_in, 128, 196, 256], [c_in, 128, 196, 256]],
@@ -56,7 +56,7 @@ class ACDModel(pl.LightningModule):
         c_in = c_out_2
         self.SA_modules.append(
             PointnetSAModuleMSG(
-                npoint=32,
+                npoint=16,
                 radii=[0.25, 0.5],
                 nsamples=[16, 32],
                 mlps=[[c_in, 256, 256, 512], [c_in, 256, 384, 512]],
