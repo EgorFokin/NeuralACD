@@ -9,6 +9,7 @@ import random
 from tqdm import tqdm
 import os
 from datetime import datetime
+import shutil
 import numpy as np
 from torch.utils.data import Subset
 import lib_acd_gen
@@ -86,8 +87,8 @@ class ACDgen(IterableDataset):
             o3d_mesh.triangles = o3d.utility.Vector3iVector(triangles)
 
             pcd = o3d_mesh.sample_points_uniformly(number_of_points=10000)
-            if random.random() < 0.8: # 80% chance
-                self.apply_gaussian_filter(pcd)
+            # if random.random() < 0.8: # 80% chance
+            #     self.apply_gaussian_filter(pcd)
             points = np.asarray(pcd.points)
             distances = self.get_distances(points, cut_verts)
 
@@ -101,7 +102,7 @@ dataset = ACDgen()
 
 #train_dataset = Subset(train_dataset, indices=list(range(320)))
 
-train_loader = DataLoader(dataset, batch_size=32, num_workers=22)
+train_loader = DataLoader(dataset, batch_size=128, num_workers=22)
 
 sample = next(iter(train_loader))
 print("Sample points shape:", sample[0].shape)
@@ -111,6 +112,10 @@ pl.seed_everything(42)
 torch.set_float32_matmul_precision('high')
 
 model = ACDModel(learning_rate=1e-3)
+
+#copy the model.py into checkpoint directory
+os.makedir(f'checkpoints/{str(datetime.now().strftime("%d,%m,%Y-%H:%M:%S"))}/', exist_ok=True)
+shutil.copy('model/model.py', f'checkpoints/{str(datetime.now().strftime("%d,%m,%Y-%H:%M:%S"))}/model.py')
 
 profiler = AdvancedProfiler(dirpath="profiler_logs", filename=str(datetime.now().strftime("%d,%m,%Y-%H:%M:%S")))
 
