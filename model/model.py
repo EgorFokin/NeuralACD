@@ -9,10 +9,15 @@ from pointnet2_ops.pointnet2_modules import PointnetFPModule, PointnetSAModuleMS
 from torch.optim.lr_scheduler import LambdaLR
 
 class ACDModel(pl.LightningModule):
-    def __init__(self, learning_rate=1e-3, use_xyz=True):
+    def __init__(self, learning_rate=1e-3, weight_decay=1e-2, use_xyz=True):
         super().__init__()
         self.save_hyperparameters()
         self._build_model()
+
+        LOSS_ALPHA = 2
+        LOSS_BETA = 1
+
+        self.loss = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor([LOSS_ALPHA/LOSS_BETA]))
         
         
     def _build_model(self):
@@ -20,19 +25,19 @@ class ACDModel(pl.LightningModule):
         c_in = 0
         self.SA_modules.append(
             PointnetSAModuleMSG(
-                npoint=2048,
-                radii=[0.03, 0.05],
-                nsamples=[16, 32],
-                mlps=[[c_in, 16, 16, 32], [c_in, 32, 32, 64]],
+                npoint=4096,
+                radii=[0.02, 0.03, 0.05],
+                nsamples=[8 ,16, 32],
+                mlps=[[c_in, 8, 8, 16], [c_in, 16, 16, 32], [c_in, 32, 32, 64]],
                 use_xyz=self.hparams.use_xyz,
             )
         )
-        c_out_0 = 32 + 64
+        c_out_0 = 16 + 32 + 64
 
         c_in = c_out_0
         self.SA_modules.append(
             PointnetSAModuleMSG(
-                npoint=512,
+                npoint=1024,
                 radii=[0.05, 0.1],
                 nsamples=[16, 32],
                 mlps=[[c_in, 64, 64, 128], [c_in, 64, 96, 128]],
@@ -44,7 +49,7 @@ class ACDModel(pl.LightningModule):
         c_in = c_out_1
         self.SA_modules.append(
             PointnetSAModuleMSG(
-                npoint=128,
+                npoint=512,
                 radii=[0.1, 0.25],
                 nsamples=[16, 32],
                 mlps=[[c_in, 128, 196, 256], [c_in, 128, 196, 256]],
@@ -53,30 +58,33 @@ class ACDModel(pl.LightningModule):
         )
         c_out_2 = 256 + 256
 
-        c_in = c_out_2
-        self.SA_modules.append(
-            PointnetSAModuleMSG(
-                npoint=16,
-                radii=[0.25, 0.5],
-                nsamples=[16, 32],
-                mlps=[[c_in, 256, 256, 512], [c_in, 256, 384, 512]],
-                use_xyz=self.hparams.use_xyz,
-            )
-        )
-        c_out_3 = 512 + 512
+        # c_in = c_out_2
+        # self.SA_modules.append(
+        #     PointnetSAModuleMSG(
+        #         npoint=16,
+        #         radii=[0.4, 0.8],
+        #         nsamples=[16, 32],
+        #         mlps=[[c_in, 256, 256, 512], [c_in, 256, 384, 512]],
+        #         use_xyz=self.hparams.use_xyz,
+        #     )
+        # )
+        # c_out_3 = 512 + 512
+        
+
+
 
         self.FP_modules = nn.ModuleList()
         self.FP_modules.append(PointnetFPModule(mlp=[256, 128, 128]))
         self.FP_modules.append(PointnetFPModule(mlp=[512 + c_out_0, 256, 256]))
         self.FP_modules.append(PointnetFPModule(mlp=[512 + c_out_1, 512, 512]))
-        self.FP_modules.append(PointnetFPModule(mlp=[c_out_3 + c_out_2, 512, 512]))
+        # self.FP_modules.append(PointnetFPModule(mlp=[c_out_3 + c_out_2, 512, 512]))
 
         self.fc_layer = nn.Sequential(
             nn.Conv1d(128, 128, kernel_size=1, bias=False),
             nn.BatchNorm1d(128),
             nn.ReLU(True),
             nn.Dropout(0.5),
-            nn.Conv1d(128, 13, kernel_size=1),
+            nn.Conv1d(128, 1, kernel_size=1),
         )
 
     def _break_up_pc(self, pc):
@@ -118,7 +126,8 @@ class ACDModel(pl.LightningModule):
     def compute_loss(self, pred, target):
         pred = pred.squeeze(1)
 
-        loss = F.mse_loss(pred, target)
+        #loss = F.mse_loss(pred, target)
+        loss = self.loss(pred, target)
         
         return loss
     
@@ -126,15 +135,23 @@ class ACDModel(pl.LightningModule):
         x, y = batch
         pred = self(x)
         loss = self.compute_loss(pred, y)
-        
+
         self.log('train_loss', loss, prog_bar=True)
+        
+        alpha = 0.05
+        self.previous_ema_loss = getattr(self, 'previous_ema_loss', loss)
+        self.ema_loss = ema_loss = alpha * loss + (1 - alpha) * self.previous_ema_loss
+        self.previous_ema_loss = ema_loss
+        self.log('ema_loss', ema_loss, prog_bar=True)
+        
+
         return loss
     
     
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.learning_rate, weight_decay=self.hparams.weight_decay)
         def lr_lambda(current_step):
-            # Decrease LR to 1% over 500 steps using exponential decay
+            # Decrease LR to 10% over 500 steps using exponential decay
             decay_rate = 0.1 ** (1 / 500)
             return decay_rate ** current_step
 

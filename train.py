@@ -1,7 +1,7 @@
 from model.model import ACDModel
 import h5py
 import torch
-from torch.utils.data import IterableDataset, DataLoader
+from torch.utils.data import IterableDataset, DataLoader, TensorDataset
 import torch.nn as nn
 import json
 import open3d as o3d
@@ -57,11 +57,46 @@ class ACDgen(IterableDataset):
 
         pcd.points = o3d.utility.Vector3dVector(smoothed_points)
 
+    def apply_random_transform(self, pcd):
+        scale_x = np.random.uniform(0.5, 4.0)
+        scale_y = np.random.uniform(0.5, 4.0)
+        scale_z = np.random.uniform(0.5, 4.0)
+
+        stretch_matrix = np.array([
+            [scale_x, 0, 0],
+            [0, scale_y, 0],
+            [0, 0, scale_z]
+        ])
+
+        points = np.asarray(pcd.points)
+        points = points @ stretch_matrix.T
+
+        pcd.points = o3d.utility.Vector3dVector(points)
+    
+    def apply_random_rotation(self, pcd):
+        angle = np.random.uniform(0, 2 * np.pi)
+        rotation_matrix = np.array([
+            [np.cos(angle), -np.sin(angle), 0],
+            [np.sin(angle), np.cos(angle), 0],
+            [0, 0, 1]
+        ])
+
+        points = np.asarray(pcd.points)
+        points = points @ rotation_matrix.T
+
+        pcd.points = o3d.utility.Vector3dVector(points)
+
+    def normalize_points(self, pcd):
+        points = np.asarray(pcd.points)
+        centroid = np.mean(points, axis=0)
+        points -= centroid
+        max_distance = np.max(np.linalg.norm(points, axis=1))
+        points /= max_distance
+        pcd.points = o3d.utility.Vector3dVector(points)
             
     def __iter__(self):
-        num_spheres = random.randint(1, 20)
+        num_spheres = 5#random.randint(3, 20)
         while True:
-
             structure_type = "sphere" #random.choice(['sphere', 'cuboid'])
             if structure_type == 'sphere':
                 structure = lib_acd_gen.generate_sphere_structure(num_spheres)
@@ -69,79 +104,71 @@ class ACDgen(IterableDataset):
                 structure = lib_acd_gen.generate_cuboid_structure(num_spheres)
 
 
-            verts = []
-            triangles = []
-            cut_verts = []
-            vertex_offset = 0
-            for mesh in structure:
-                verts.extend(mesh.vertices)
-                triangles.extend([[v0 + vertex_offset, v1 + vertex_offset, v2 + vertex_offset] for v0, v1, v2 in mesh.triangles])
-
-                vertex_offset += len(mesh.vertices)
-                cut_verts.extend(mesh.cut_verts)
-            
             o3d_mesh = o3d.geometry.TriangleMesh()
             
             #print(verts)
-            o3d_mesh.vertices = o3d.utility.Vector3dVector(verts)
-            o3d_mesh.triangles = o3d.utility.Vector3iVector(triangles)
+            o3d_mesh.vertices = o3d.utility.Vector3dVector(structure.vertices)
+            o3d_mesh.triangles = o3d.utility.Vector3iVector(structure.triangles)
 
             pcd = o3d_mesh.sample_points_uniformly(number_of_points=10000)
-            # if random.random() < 0.8: # 80% chance
-            #     self.apply_gaussian_filter(pcd)
+            
+            distances = self.get_distances(np.asarray(pcd.points), structure.cut_verts)
+
+            # self.apply_random_transform(pcd)
+            # self.apply_random_rotation(pcd)
+            # self.apply_gaussian_filter(pcd,sigma=0.1,radius=random.uniform(0.01, 0.15))
+            self.normalize_points(pcd)
             points = np.asarray(pcd.points)
-            distances = self.get_distances(points, cut_verts)
 
             points = torch.tensor(points, dtype=torch.float32)
             distances = torch.tensor(distances, dtype=torch.float32)
-            distances = torch.clamp(distances, 0.0, 0.05)*20.0  # Scale distances to [0, 1] range
+            distances = 1 - torch.clamp(distances, 0.0, 0.05)*20.0  # Scale distances to [0, 1] range
 
             yield points, distances
 
-dataset = ACDgen()
+if __name__ == "__main__":
+    dataset = ACDgen()
 
-#train_dataset = Subset(train_dataset, indices=list(range(320)))
 
-train_loader = DataLoader(dataset, batch_size=128, num_workers=22)
 
-sample = next(iter(train_loader))
-print("Sample points shape:", sample[0].shape)
-print("Sample distances shape:", sample[1].shape)
+    train_loader = DataLoader(dataset, batch_size=8, num_workers=8)
 
-pl.seed_everything(42)
-torch.set_float32_matmul_precision('high')
 
-model = ACDModel(learning_rate=1e-3)
+    pl.seed_everything(42)
+    
+    torch.set_float32_matmul_precision('high')
 
-#copy the model.py into checkpoint directory
-os.makedir(f'checkpoints/{str(datetime.now().strftime("%d,%m,%Y-%H:%M:%S"))}/', exist_ok=True)
-shutil.copy('model/model.py', f'checkpoints/{str(datetime.now().strftime("%d,%m,%Y-%H:%M:%S"))}/model.py')
+    model = ACDModel(learning_rate=1e-3)
 
-profiler = AdvancedProfiler(dirpath="profiler_logs", filename=str(datetime.now().strftime("%d,%m,%Y-%H:%M:%S")))
+    #copy the model.py into checkpoint directory
+    os.makedirs(f'checkpoints/{str(datetime.now().strftime("%d,%m,%Y-%H:%M:%S"))}/', exist_ok=True)
+    shutil.copy('model/model.py', f'checkpoints/{str(datetime.now().strftime("%d,%m,%Y-%H:%M:%S"))}/model.py')
 
-callbacks = [
-    ModelCheckpoint(monitor='train_loss',
-        dirpath=f'checkpoints/{str(datetime.now().strftime("%d,%m,%Y-%H:%M:%S"))}/',
-        filename='best-model-{train_loss}',
-        save_top_k=3,
-        mode='min',
-        every_n_train_steps=1),
-        ]
+    profiler = AdvancedProfiler(dirpath="profiler_logs", filename=str(datetime.now().strftime("%d,%m,%Y-%H:%M:%S")))
 
-logger = CSVLogger("logs", name="my_model")
+    callbacks = [
+        ModelCheckpoint(monitor='ema_loss',
+            dirpath=f'checkpoints/{str(datetime.now().strftime("%d,%m,%Y-%H:%M:%S"))}/',
+            filename='best-model-{ema_loss}',
+            save_top_k=3,
+            mode='min',
+            every_n_train_steps=1),
+            ]
 
-trainer = pl.Trainer(
-        devices=1,
-        accelerator="auto",
-        callbacks=callbacks,
-        log_every_n_steps=10,
-        logger=logger,
-        max_steps=2000,
-        #profiler=profiler,
+    logger = CSVLogger("logs")
+
+    trainer = pl.Trainer(
+            devices=1,
+            accelerator="auto",
+            callbacks=callbacks,
+            log_every_n_steps=10,
+            logger=logger,
+            max_steps=2000,
+            #profiler=profiler,
+        )
+
+    # Start Training
+    trainer.fit(
+        model=model,
+        train_dataloaders=train_loader
     )
-
-# Start Training
-trainer.fit(
-    model=model,
-    train_dataloaders=train_loader
-)
