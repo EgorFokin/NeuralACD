@@ -321,7 +321,7 @@ MeshList process(Mesh mesh, vector<Vec3D> cut_points) {
   write_stats(h, cvxs.size());
 
   // cvxs.push_back(hull);
-  return parts;
+  return cvxs;
 }
 
 } // namespace acd_gen

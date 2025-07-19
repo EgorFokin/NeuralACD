@@ -21,7 +21,7 @@ from model.model import ACDModel
 from scipy.spatial import cKDTree
 
 
-CHECKPOINT="checkpoints/18,07,2025-22:05:31/best-model-ema_loss=0.44677862524986267.ckpt"
+CHECKPOINT="checkpoints/18,07,2025-23:02:09/best-model-ema_loss=0.1519765555858612.ckpt"
 
 def normalize_points(pcd):
     points = np.asarray(pcd.points)
@@ -117,7 +117,7 @@ def split_points(points, threshold=0.03, iterations=10000):
 
 
 it = ACDgen(output_meshes=True).__iter__()
-lib_acd_gen.set_seed(8)
+lib_acd_gen.set_seed(44)
 #next(it)  
 points, distances_t, structure = next(it)
 
@@ -144,9 +144,9 @@ with torch.no_grad():
 
 # distances = distances_t
 
-# threshold = 0.4
-# distances[distances < threshold] = 0
-# distances[distances >= threshold] = 1
+threshold = 0.4
+distances[distances < threshold] = 0
+distances[distances >= threshold] = 1
 
 # cut_points = points[distances == 1]
 # cut_points = remove_outliers(cut_points, threshold=0.05)

@@ -21,7 +21,7 @@ from scipy.spatial import cKDTree
 
 NUM_SAMPLES = 100
 
-CHECKPOINT="checkpoints/13,07,2025-19:01:21/best-model-ema_loss=0.29254528880119324.ckpt"
+CHECKPOINT="checkpoints/18,07,2025-23:02:09/best-model-ema_loss=0.1519765555858612.ckpt"
 
 def remove_outliers(points, threshold=0.05):
     # Remove points that have less than 3 neighbors within the threshold
@@ -36,7 +36,7 @@ model.load_state_dict(torch.load(CHECKPOINT)["state_dict"])
 model.eval()
 
 it = ACDgen(output_meshes=True).__iter__()
-lib_acd_gen.set_seed(42)
+lib_acd_gen.set_seed(44)
 #next(it)  
 
 for i in range(NUM_SAMPLES):
@@ -56,31 +56,33 @@ for i in range(NUM_SAMPLES):
     cut_points = points[distances == 1]
     cut_points = remove_outliers(cut_points, threshold=0.05)
 
+
+
     cut_points_vector = lib_acd_gen.VecArray3d(cut_points.tolist())
     decomposed = lib_acd_gen.process(structure,cut_points_vector)
 
-    scene = trimesh.Scene()
+    # scene = trimesh.Scene()
 
-    for mesh in decomposed:
-        triangles = np.asarray(mesh.triangles)
-        vertices = np.asarray(mesh.vertices)
-        if (triangles.shape[0] == 0 or vertices.shape[0] == 0):
-            continue
-        tmesh = trimesh.Trimesh(vertices=vertices, faces=triangles, process=True)
+    # for mesh in decomposed:
+    #     triangles = np.asarray(mesh.triangles)
+    #     vertices = np.asarray(mesh.vertices)
+    #     if (triangles.shape[0] == 0 or vertices.shape[0] == 0):
+    #         continue
+    #     tmesh = trimesh.Trimesh(vertices=vertices, faces=triangles, process=True)
 
-        #apply a random color to each mesh
-        tmesh.visual.face_colors = np.random.randint(0, 255, (3), dtype=np.uint8)
+    #     #apply a random color to each mesh
+    #     tmesh.visual.face_colors = np.random.randint(0, 255, (3), dtype=np.uint8)
 
-        scene.add_geometry(tmesh)
+    #     scene.add_geometry(tmesh)
 
-    scene.export("decomposed.glb")
+    # scene.export("decomposed.glb")
     
 
-    tmesh = trimesh.Trimesh(vertices=structure.vertices, faces=structure.triangles, process=True)
-    tmesh.export("structure.glb")
-    scene.show()
+    # tmesh = trimesh.Trimesh(vertices=structure.vertices, faces=structure.triangles, process=True)
+    # tmesh.export("structure.glb")
+    # scene.show()
 
-    break
+    # break
 
 
 total_concavity = 0.0

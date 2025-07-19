@@ -82,7 +82,7 @@ class ACDgen(IterableDataset):
         return verts
             
     def __iter__(self):
-        num_spheres = random.randint(3, 8)
+        num_spheres = 4#random.randint(3, 8)
         while True:
             structure_type = "sphere" #random.choice(['sphere', 'cuboid'])
             if structure_type == 'sphere':
@@ -101,14 +101,16 @@ class ACDgen(IterableDataset):
             
             distances = self.get_distances(np.asarray(pcd.points), structure.cut_verts)
 
-            self.apply_random_transform(pcd)
-            self.apply_random_rotation(pcd)
-            self.apply_gaussian_filter(pcd,sigma=0.1,radius=random.uniform(0.01, 0.15))
+            # self.apply_random_transform(pcd)
+            # self.apply_random_rotation(pcd)
+            # self.apply_gaussian_filter(pcd,sigma=0.1,radius=random.uniform(0.01, 0.15))
+            
+            # points = self.normalize_mesh(pcd.points)
             points = np.asarray(pcd.points)
 
             points = torch.tensor(points, dtype=torch.float32)
             distances = torch.tensor(distances, dtype=torch.float32)
-            distances = 1 - (torch.clamp(distances, 0.01, 0.06)-0.01)*20.0  # Scale distances to [0, 1] range
+            distances = 1 - (torch.clamp(distances, 0.01, 0.035)-0.01)*40.0  # Scale distances to [0, 1] range
 
             if self.output_meshes:
                 yield points, distances, structure

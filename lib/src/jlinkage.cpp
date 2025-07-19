@@ -179,7 +179,7 @@ vector<Plane> JLinkage::get_best_planes() {
 vector<Plane> JLinkage::cluster_planes(vector<vector<int>> &clusters) {
   vector<Plane> planes;
   for (auto &cluster : clusters) {
-    if (cluster.size() < 70)
+    if (cluster.size() < 20)
       continue;
 
     Vec3D centroid = {0.0, 0.0, 0.0};
