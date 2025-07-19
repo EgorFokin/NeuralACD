@@ -2,6 +2,7 @@ from scipy.spatial.distance import pdist, squareform
 import numpy as np
 import random
 
+
 class JLinkage:
 
     def __init__(self,sigma=1, num_samples=10000, threshold=0.1):
@@ -127,7 +128,6 @@ class JLinkage:
             
 
         best_planes = self._planes_from_clusters(clusters, points)
-        print(best_planes)
         return best_planes, clusters
                         
 

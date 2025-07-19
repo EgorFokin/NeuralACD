@@ -1,21 +1,27 @@
-import lib_acd_gen
+
 import open3d as o3d
 import numpy as np
 from matplotlib import cm
 import trimesh
 import torch
 import sys
+import os
+
+sys.path.append("lib/build")
+
+import lib_acd_gen
+
 from utils.jlinkage import JLinkage
 
 from sklearn.cluster import DBSCAN
 
-from train import ACDgen
+from utils.ACDgen import ACDgen
 
 from model.model import ACDModel
 from scipy.spatial import cKDTree
 
 
-CHECKPOINT="checkpoints/13,07,2025-19:01:21/best-model-ema_loss=0.29254528880119324.ckpt"
+CHECKPOINT="checkpoints/18,07,2025-22:05:31/best-model-ema_loss=0.44677862524986267.ckpt"
 
 def normalize_points(pcd):
     points = np.asarray(pcd.points)
@@ -110,10 +116,10 @@ def split_points(points, threshold=0.03, iterations=10000):
 
 
 
-it = ACDgen().__iter__()
-#lib_acd_gen.set_seed(4)
+it = ACDgen(output_meshes=True).__iter__()
+lib_acd_gen.set_seed(8)
 #next(it)  
-points, distances_t = next(it)
+points, distances_t, structure = next(it)
 
 points = np.asarray(points)
 
@@ -134,51 +140,42 @@ with torch.no_grad():
     distances = model(torch.tensor(points, dtype=torch.float32).cuda().unsqueeze(0))
     distances = torch.sigmoid(distances)  # Ensure distances are in [0, 1] range
     distances = distances.squeeze().cpu().numpy()
+    print(max(distances))
 
+# distances = distances_t
 
+# threshold = 0.4
+# distances[distances < threshold] = 0
+# distances[distances >= threshold] = 1
 
-threshold = 0.4
-distances[distances < threshold] = 0
-distances[distances >= threshold] = 1
-
-cut_points = points[distances == 1]
-cut_points = remove_outliers(cut_points, threshold=0.05)
+# cut_points = points[distances == 1]
+# cut_points = remove_outliers(cut_points, threshold=0.05)
 
 colormap = cm.get_cmap("jet")
 colors = colormap(distances)[:, :3]  # RGB, invert to make close = red
 
-scene = trimesh.Scene()
+
+point_cloud = trimesh.points.PointCloud(points, colors=colors)
+point_cloud.show()
 
 
+# scene = trimesh.Scene()
 
-non_cut_points = points[distances == 0]
-non_cut_colors = colors[distances == 0]
-point_cloud = trimesh.points.PointCloud(non_cut_points, colors=non_cut_colors)
+# for mesh in decomposed:
+#     triangles = np.asarray(mesh.triangles)
+#     vertices = np.asarray(mesh.vertices)
+#     if (triangles.shape[0] == 0 or vertices.shape[0] == 0):
+#         continue
+#     tmesh = trimesh.Trimesh(vertices=vertices, faces=triangles, process=True)
 
-scene.add_geometry(point_cloud)
+#     #apply a random color to each mesh
+#     tmesh.visual.face_colors = np.random.randint(0, 255, (3), dtype=np.uint8)
+    
+#     scene.add_geometry(tmesh)
 
-print(cut_points.shape)
+# scene.export("decomposed.glb")
 
-jlinkage = JLinkage(sigma=-1, num_samples=20000, threshold=0.07)
-planes, clusters = jlinkage.get_best_planes(cut_points)
+# tmesh = trimesh.Trimesh(vertices=structure.vertices, faces=structure.triangles, process=True)
+# tmesh.export("structure.glb")
 
-
-
-for plane in planes:
-    a, b, c, d = plane
-    trimesh_plane = get_trimesh_plane(a, b, c, d)
-    scene.add_geometry(trimesh_plane)
-
-
-cut_colors = np.zeros((cut_points.shape[0], 3), dtype=np.float32)
-
-
-for i in range(len(clusters)):
-    cut_colors[clusters[i]] = np.random.rand(3)  # Random color for each cluster
-  
-point_cloud = trimesh.points.PointCloud(cut_points, colors=cut_colors)
-
-
-scene.add_geometry(point_cloud)
-
-scene.show()
+# scene.show()

@@ -4,6 +4,7 @@
 #include <generate.hpp>
 #include <icosphere.hpp>
 #include <mesh.hpp>
+#include <preprocess.hpp>
 #include <random>
 
 std::random_device rd;
@@ -109,6 +110,8 @@ Mesh generate_sphere_structure(int obj_num, double min_radius,
 
     vert_offset += part.vertices.size();
   }
+
+  ManifoldPreprocess(structure, 50.0f, 0.05f);
   return structure;
 }
 
