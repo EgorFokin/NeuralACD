@@ -1,39 +1,66 @@
 #include <clip.hpp>
+#include <config.hpp>
+#include <core.hpp>
 #include <generate.hpp>
-#include <mesh.hpp>
 #include <preprocess.hpp>
 #include <process.hpp>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/stl_bind.h>
-
 namespace py = pybind11;
 
 PYBIND11_MAKE_OPAQUE(std::vector<std::array<double, 3>>);
 PYBIND11_MAKE_OPAQUE(std::vector<std::array<double, 4>>);
 
-PYBIND11_MODULE(lib_acd_gen, m) {
+PYBIND11_MODULE(lib_neural_acd, m) {
   py::bind_vector<std::vector<std::array<double, 3>>>(
       m, "VecArray3d"); // 3D vector array
   py::bind_vector<std::vector<std::array<double, 4>>>(
       m, "VecArray4d");                                 // plane array
   py::bind_vector<std::vector<double>>(m, "VecDouble"); // cut verts
-  py::class_<acd_gen::Mesh>(m, "Mesh")
-      .def_readwrite("vertices", &acd_gen::Mesh::vertices)
-      .def_readwrite("triangles", &acd_gen::Mesh::triangles)
-      .def_readwrite("cut_verts", &acd_gen::Mesh::cut_verts);
-  py::bind_vector<acd_gen::MeshList>(m, "MeshList");
+  py::class_<neural_acd::Mesh>(m, "Mesh")
+      .def_readwrite("vertices", &neural_acd::Mesh::vertices)
+      .def_readwrite("triangles", &neural_acd::Mesh::triangles)
+      .def_readwrite("cut_verts", &neural_acd::Mesh::cut_verts);
+  py::bind_vector<neural_acd::MeshList>(m, "MeshList");
 
-  m.def("generate_cuboid_structure", &acd_gen::generate_cuboid_structure,
+  py::class_<neural_acd::Config>(m, "Config")
+      .def(py::init<>())
+      .def_readwrite("generation_cuboid_width_min",
+                     &neural_acd::Config::generation_cuboid_width_min)
+      .def_readwrite("generation_cuboid_width_max",
+                     &neural_acd::Config::generation_cuboid_width_max)
+      .def_readwrite("generation_sphere_radius_min",
+                     &neural_acd::Config::generation_sphere_radius_min)
+      .def_readwrite("generation_sphere_radius_max",
+                     &neural_acd::Config::generation_sphere_radius_max)
+      .def_readwrite("generation_icosphere_subdivs",
+                     &neural_acd::Config::generation_icosphere_subdivs)
+      .def_readwrite("pcd_res", &neural_acd::Config::pcd_res)
+      .def_readwrite("remesh_res", &neural_acd::Config::remesh_res)
+      .def_readwrite("remesh_threshold", &neural_acd::Config::remesh_threshold)
+      .def_readwrite("cost_rv_k", &neural_acd::Config::cost_rv_k)
+      .def_readwrite("merge_threshold", &neural_acd::Config::merge_threshold)
+      .def_readwrite("jlinkage_sigma", &neural_acd::Config::jlinkage_sigma)
+      .def_readwrite("jlinkage_num_samples",
+                     &neural_acd::Config::jlinkage_num_samples)
+      .def_readwrite("jlinkage_threshold",
+                     &neural_acd::Config::jlinkage_threshold)
+      .def_readwrite("jlinkage_outlier_threshold",
+                     &neural_acd::Config::jlinkage_outlier_threshold);
+  m.attr("config") =
+      py::cast(&neural_acd::config, py::return_value_policy::reference);
+
+  m.def("generate_cuboid_structure", &neural_acd::generate_cuboid_structure,
         py::arg("obj_num"));
-  m.def("generate_sphere_structure", &acd_gen::generate_sphere_structure,
-        py::arg("obj_num"), py::arg("min_radius") = 0.1,
-        py::arg("max_radius") = 0.5);
-  m.def("test", &acd_gen::test);
-  m.def("set_seed", &acd_gen::set_seed, py::arg("seed"));
-  m.def("clip", &acd_gen::clip, py::arg("mesh"), py::arg("plane_args"));
-  m.def("multiclip", &acd_gen::multiclip, py::arg("mesh"), py::arg("planes"));
-  m.def("process", &acd_gen::process, py::arg("mesh"), py::arg("cut_points"));
-  m.def("preprocess", &acd_gen::ManifoldPreprocess, py::arg("mesh"),
+  m.def("generate_sphere_structure", &neural_acd::generate_sphere_structure,
+        py::arg("obj_num"));
+  m.def("set_seed", &neural_acd::set_seed, py::arg("seed"));
+  m.def("clip", &neural_acd::clip, py::arg("mesh"), py::arg("plane_args"));
+  m.def("multiclip", &neural_acd::multiclip, py::arg("mesh"),
+        py::arg("planes"));
+  m.def("process", &neural_acd::process, py::arg("mesh"),
+        py::arg("cut_points"));
+  m.def("preprocess", &neural_acd::manifold_preprocess, py::arg("mesh"),
         py::arg("scale"), py::arg("level_set"));
 }

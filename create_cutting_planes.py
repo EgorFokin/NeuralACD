@@ -9,7 +9,6 @@ import os
 
 sys.path.append("lib/build")
 
-import lib_acd_gen
 
 from utils.jlinkage import JLinkage
 
@@ -21,7 +20,7 @@ from model.model import ACDModel
 from scipy.spatial import cKDTree
 
 
-CHECKPOINT="checkpoints/18,07,2025-23:02:09/best-model-ema_loss=0.1519765555858612.ckpt"
+CHECKPOINT="checkpoints/20,07,2025-11:53:02/best-model-ema_loss=0.21378971636295319.ckpt"
 
 def normalize_points(pcd):
     points = np.asarray(pcd.points)
@@ -117,7 +116,7 @@ def split_points(points, threshold=0.03, iterations=10000):
 
 
 it = ACDgen(output_meshes=True).__iter__()
-lib_acd_gen.set_seed(44)
+lib_acd_gen.set_seed(42)
 #next(it)  
 points, distances_t, structure = next(it)
 
@@ -144,12 +143,14 @@ with torch.no_grad():
 
 # distances = distances_t
 
-threshold = 0.4
+threshold = 0.7
 distances[distances < threshold] = 0
 distances[distances >= threshold] = 1
 
-# cut_points = points[distances == 1]
-# cut_points = remove_outliers(cut_points, threshold=0.05)
+cut_points = points[distances == 1]
+cut_points = remove_outliers(cut_points, threshold=0.05)
+
+print(f"Cut points: {cut_points.shape[0]}")
 
 colormap = cm.get_cmap("jet")
 colors = colormap(distances)[:, :3]  # RGB, invert to make close = red

@@ -1,9 +1,9 @@
 #include <cmath>
+#include <core.hpp>
 #include <icosphere.hpp>
 #include <limits>
-#include <mesh.hpp>
 
-namespace acd_gen {
+namespace neural_acd {
 
 Icosphere::Icosphere(double r, Vec3D pos, int subdivisions) {
   this->r = r;
@@ -78,4 +78,4 @@ void Icosphere::filter_cut_verts(std::vector<Icosphere> &parts, double eps) {
     }
   }
 }
-} // namespace acd_gen
+} // namespace neural_acd

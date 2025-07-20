@@ -1,12 +1,12 @@
 #include <cmath>
+#include <core.hpp>
 #include <decompose_spheres.hpp>
 #include <icosphere.hpp>
 #include <iostream>
-#include <mesh.hpp>
 #include <tuple>
 #include <vector>
 
-namespace acd_gen {
+namespace neural_acd {
 
 std::vector<Icosphere *> detect_collisiont(std::vector<Icosphere> &parts,
                                            Icosphere &new_part) {
@@ -274,4 +274,4 @@ void update_decomposition(std::vector<Icosphere> &parts, Icosphere &new_part) {
     part.filter_cut_verts(parts);
   }
 }
-} // namespace acd_gen
+} // namespace neural_acd

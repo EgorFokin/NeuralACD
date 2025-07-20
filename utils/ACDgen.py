@@ -2,7 +2,7 @@ import torch
 import open3d as o3d
 from torch.utils.data import IterableDataset
 import numpy as np
-import lib_acd_gen
+import lib_neural_acd
 import random
 
 class ACDgen(IterableDataset):
@@ -86,9 +86,9 @@ class ACDgen(IterableDataset):
         while True:
             structure_type = "sphere" #random.choice(['sphere', 'cuboid'])
             if structure_type == 'sphere':
-                structure = lib_acd_gen.generate_sphere_structure(num_spheres)
+                structure = lib_neural_acd.generate_sphere_structure(num_spheres)
             elif structure_type == 'cuboid':
-                structure = lib_acd_gen.generate_cuboid_structure(num_spheres)
+                structure = lib_neural_acd.generate_cuboid_structure(num_spheres)
 
 
             o3d_mesh = o3d.geometry.TriangleMesh()

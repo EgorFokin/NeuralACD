@@ -1,21 +1,37 @@
 #include <algorithm>
 #include <clip.hpp>
-#include <clustering.hpp>
+#include <config.hpp>
+#include <core.hpp>
 #include <cost.hpp>
 #include <fstream>
 #include <iostream>
 #include <jlinkage.hpp>
 #include <map>
-#include <mesh.hpp>
 #include <preprocess.hpp>
 #include <process.hpp>
 #include <queue>
+#include <unordered_map>
 
 using namespace std;
 
-namespace acd_gen {
+namespace neural_acd {
 
-void MergeCH(Mesh &ch1, Mesh &ch2, Mesh &ch) {
+int32_t find_min_element(const std::vector<double> d, double *const m,
+                         const int32_t begin, const int32_t end) {
+  int32_t idx = -1;
+  double min = (std::numeric_limits<double>::max)();
+  for (size_t i = begin; i < size_t(end); ++i) {
+    if (d[i] < min) {
+      idx = i;
+      min = d[i];
+    }
+  }
+
+  *m = min;
+  return idx;
+}
+
+void merge_ch(Mesh &ch1, Mesh &ch2, Mesh &ch) {
   Mesh merge;
   merge.vertices.insert(merge.vertices.end(), ch1.vertices.begin(),
                         ch1.vertices.end());
@@ -27,29 +43,29 @@ void MergeCH(Mesh &ch1, Mesh &ch2, Mesh &ch) {
     merge.triangles.push_back({int(ch2.triangles[i][0] + ch1.vertices.size()),
                                int(ch2.triangles[i][1] + ch1.vertices.size()),
                                int(ch2.triangles[i][2] + ch1.vertices.size())});
-  merge.ComputeCH(ch);
+  merge.compute_ch(ch);
 }
 
-void print_cost_matrix(vector<double> matrix) {
-  for (int r = 0; r < matrix.size(); r++) {
-    // for (int c = 0; c <= r.size(); c++) {
-    cout << matrix[r] << ' ';
-    // }
+void print_cost_mtx(const vector<double> &costMatrix) {
+  for (size_t i = 0; i < costMatrix.size(); ++i) {
+    if (costMatrix[i] == INF)
+      cout << "INF ";
+    else
+      cout << costMatrix[i] << " ";
   }
   cout << endl;
 }
 
-double MergeConvexHulls(Mesh &m, MeshList &meshs, MeshList &cvxs,
-                        double epsilon, double threshold) {
+double multimerge_ch(Mesh &m, MeshList &meshs, MeshList &cvxs,
+                     double threshold) {
   size_t nConvexHulls = (size_t)cvxs.size();
   double h = 0;
 
   if (nConvexHulls > 1) {
     int bound = ((((nConvexHulls - 1) * nConvexHulls)) >> 1);
     // Populate the cost matrix
-    vector<double> costMatrix, precostMatrix;
-    costMatrix.resize(bound);    // only keeps the top half of the matrix
-    precostMatrix.resize(bound); // only keeps the top half of the matrix
+    vector<double> costMatrix;
+    costMatrix.resize(bound); // only keeps the top half of the matrix
 
     size_t p1, p2;
     for (int idx = 0; idx < bound; ++idx) {
@@ -59,42 +75,35 @@ double MergeConvexHulls(Mesh &m, MeshList &meshs, MeshList &cvxs,
           (p1 * (p1 + 1)) >> 1; // compute nearest triangle number from index
       p2 = idx - sum;           // modular arithmetic from triangle number
       p1++;
-      double dist = MeshDist(cvxs[p1], cvxs[p2]);
+      double dist = mesh_dist(cvxs[p1], cvxs[p2]);
       if (dist < threshold) {
         Mesh combinedCH;
-        MergeCH(cvxs[p1], cvxs[p2], combinedCH);
+        merge_ch(cvxs[p1], cvxs[p2], combinedCH);
 
-        costMatrix[idx] =
-            ComputeRv(cvxs[p1], cvxs[p2], combinedCH, 0.03, 0.0001);
-        precostMatrix[idx] =
-            max(ComputeHCost(meshs[p1], cvxs[p1], 0.03, 3000, 42),
-                ComputeHCost(meshs[p2], cvxs[p2], 0.03, 3000, 42));
+        costMatrix[idx] = compute_rv(cvxs[p1], cvxs[p2], combinedCH);
       } else {
         costMatrix[idx] = INF;
       }
     }
-    // print_cost_matrix(costMatrix);
+    // print_cost_mtx(costMatrix);
 
     size_t costSize = (size_t)cvxs.size();
 
     while (true) {
       // Search for lowest cost
       double bestCost = INF;
-      const int32_t addr = FindMinimumElement(costMatrix, &bestCost, 0,
-                                              (int32_t)costMatrix.size());
+      const int32_t addr = find_min_element(costMatrix, &bestCost, 0,
+                                            (int32_t)costMatrix.size());
+
+      // std::cout << "best cost: " << bestCost << " at addr: " << addr
+      //           << std::endl;
 
       if (addr < 0) {
         break;
       }
 
-      // if dose not set max nConvexHull, stop the merging when bestCost is
-      // larger than the threshold
       if (bestCost > threshold)
         break;
-      if (bestCost - precostMatrix[addr] > 0.03) {
-        costMatrix[addr] = INF;
-        continue;
-      }
 
       h = max(h, bestCost);
       const size_t addrI =
@@ -105,7 +114,7 @@ double MergeConvexHulls(Mesh &m, MeshList &meshs, MeshList &cvxs,
 
       // Make the lowest cost row and column into a new hull
       Mesh cch;
-      MergeCH(cvxs[p1], cvxs[p2], cch);
+      merge_ch(cvxs[p1], cvxs[p2], cch);
       cvxs[p2] = cch;
 
       swap(cvxs[p1], cvxs[cvxs.size() - 1]);
@@ -116,28 +125,22 @@ double MergeConvexHulls(Mesh &m, MeshList &meshs, MeshList &cvxs,
       // Calculate costs versus the new hull
       size_t rowIdx = ((p2 - 1) * p2) >> 1;
       for (size_t i = 0; (i < p2); ++i) {
-        double dist = MeshDist(cvxs[p2], cvxs[i]);
+        double dist = mesh_dist(cvxs[p2], cvxs[i]);
         if (dist < threshold) {
           Mesh combinedCH;
-          MergeCH(cvxs[p2], cvxs[i], combinedCH);
-          costMatrix[rowIdx] =
-              ComputeRv(cvxs[p2], cvxs[i], combinedCH, 0.03, 0.0001);
-          precostMatrix[rowIdx++] =
-              max(precostMatrix[p2] + bestCost, precostMatrix[i]);
+          merge_ch(cvxs[p2], cvxs[i], combinedCH);
+          costMatrix[rowIdx] = compute_rv(cvxs[p2], cvxs[i], combinedCH);
         } else
           costMatrix[rowIdx++] = INF;
       }
 
       rowIdx += p2;
       for (size_t i = p2 + 1; (i < costSize); ++i) {
-        double dist = MeshDist(cvxs[p2], cvxs[i]);
+        double dist = mesh_dist(cvxs[p2], cvxs[i]);
         if (dist < threshold) {
           Mesh combinedCH;
-          MergeCH(cvxs[p2], cvxs[i], combinedCH);
-          costMatrix[rowIdx] =
-              ComputeRv(cvxs[p2], cvxs[i], combinedCH, 0.03, 0.0001);
-          precostMatrix[rowIdx] =
-              max(precostMatrix[p2] + bestCost, precostMatrix[i]);
+          merge_ch(cvxs[p2], cvxs[i], combinedCH);
+          costMatrix[rowIdx] = compute_rv(cvxs[p2], cvxs[i], combinedCH);
         } else
           costMatrix[rowIdx] = INF;
         rowIdx += i;
@@ -151,7 +154,6 @@ double MergeConvexHulls(Mesh &m, MeshList &meshs, MeshList &cvxs,
         for (size_t i = 0; i < p1; ++i) {
           if (i != p2) {
             costMatrix[rowIdx] = costMatrix[top_row];
-            precostMatrix[rowIdx] = precostMatrix[top_row];
           }
           ++rowIdx;
           ++top_row;
@@ -161,20 +163,17 @@ double MergeConvexHulls(Mesh &m, MeshList &meshs, MeshList &cvxs,
         rowIdx += p1;
         for (size_t i = p1 + 1; i < costSize; ++i) {
           costMatrix[rowIdx] = costMatrix[top_row];
-          precostMatrix[rowIdx] = precostMatrix[top_row++];
           rowIdx += i;
         }
       }
       costMatrix.resize(erase_idx);
-      precostMatrix.resize(erase_idx);
-      // print_cost_matrix(costMatrix);
     }
   }
 
   return h;
 }
 
-MeshList SeparateDisjoint_step(Mesh &part) {
+MeshList separate_disjoint_step(Mesh &part) {
   if (part.triangles.empty()) {
     return {};
   }
@@ -197,7 +196,7 @@ MeshList SeparateDisjoint_step(Mesh &part) {
     edge_map[e3].push_back(i);
   }
 
-  map<int, int> tri_to_part; // triangle index -> part number
+  unordered_map<int, int> tri_to_part; // triangle index -> part number
   int part_num = 0;
 
   // Flood fill to find connected components
@@ -258,10 +257,10 @@ MeshList SeparateDisjoint_step(Mesh &part) {
   return new_parts;
 }
 
-void SeparateDisjoint(MeshList &parts) {
+void separate_disjoint(MeshList &parts) {
   MeshList new_parts;
   for (auto &part : parts) {
-    MeshList res = SeparateDisjoint_step(part);
+    MeshList res = separate_disjoint_step(part);
     new_parts.insert(new_parts.end(), res.begin(), res.end());
   }
   parts.clear();
@@ -277,30 +276,38 @@ void write_stats(double concavity, int n_parts) {
 }
 
 MeshList process(Mesh mesh, vector<Vec3D> cut_points) {
-  cout << cut_points.size() << " cut points provided." << endl;
+  // cout << cut_points.size() << " cut points provided." << endl;
 
   MeshList parts;
   if (cut_points.size() != 0) {
 
-    JLinkage jlinkage;
+    JLinkage jlinkage(config.jlinkage_sigma, config.jlinkage_num_samples,
+                      config.jlinkage_threshold,
+                      config.jlinkage_outlier_threshold);
     jlinkage.set_points(cut_points);
     vector<Plane> planes = jlinkage.get_best_planes();
 
-    parts = multiclip(mesh, planes);
+    if (planes.empty()) {
+      parts.push_back(mesh);
+    } else {
+      parts = multiclip(mesh, planes);
+    }
+
   } else {
     parts.push_back(mesh);
   }
-  SeparateDisjoint(parts);
+  separate_disjoint(parts);
   MeshList cvxs;
   for (auto &part : parts) {
     Mesh ch;
-    part.ComputeCH(ch);
+    part.compute_ch(ch);
     cvxs.push_back(ch);
-    double h = ComputeHCost(part, ch, 0.03, 3000, 42);
-    cout << h << endl;
+    double h = compute_h(part, ch, config.cost_rv_k, config.pcd_res);
+    // cout << h << endl;
   }
 
-  MergeConvexHulls(mesh, parts, cvxs, 0.0001, 0.002);
+  // std::cout << "Merge threshold: " << config.merge_threshold << std::endl;
+  multimerge_ch(mesh, parts, cvxs, config.merge_threshold);
 
   Mesh hull;
   int vertex_offset = 0;
@@ -313,10 +320,11 @@ MeshList process(Mesh mesh, vector<Vec3D> cut_points) {
     }
     vertex_offset += cvx.vertices.size();
   }
-  ManifoldPreprocess(hull, 50.0f, 0.05f);
+  manifold_preprocess(hull, config.remesh_res, config.remesh_threshold);
 
-  double h = ComputeHCost(mesh, hull, 0.03, 3000, 42);
+  double h = compute_h(mesh, hull, config.cost_rv_k, config.pcd_res);
   cout << "Final concavity: " << h << endl;
+  cout << "Number of parts: " << cvxs.size() << endl;
 
   write_stats(h, cvxs.size());
 
@@ -324,4 +332,4 @@ MeshList process(Mesh mesh, vector<Vec3D> cut_points) {
   return cvxs;
 }
 
-} // namespace acd_gen
+} // namespace neural_acd

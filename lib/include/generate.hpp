@@ -1,15 +1,12 @@
 #pragma once
+#include <core.hpp>
 #include <cuboid.hpp>
 #include <icosphere.hpp>
-#include <mesh.hpp>
 
-namespace acd_gen {
+namespace neural_acd {
 
-Cuboid generate_cuboid();
-Icosphere generate_sphere(double min_radius = 0.1, double max_radius = 0.5);
+Cuboid generate_cuboid(double min_width, double max_width);
+Icosphere generate_sphere(double min_radius, double max_radius);
 Mesh generate_cuboid_structure(int obj_num);
-Mesh generate_sphere_structure(int obj_num, double min_radius = 0.1,
-                               double max_radius = 0.5);
-Mesh test();
-void set_seed(unsigned int seed);
-} // namespace acd_gen
+Mesh generate_sphere_structure(int obj_num);
+} // namespace neural_acd

@@ -1,36 +1,28 @@
+#include <config.hpp>
+#include <core.hpp>
 #include <cuboid.hpp>
 #include <decompose_cuboids.hpp>
 #include <decompose_spheres.hpp>
 #include <generate.hpp>
 #include <icosphere.hpp>
-#include <mesh.hpp>
 #include <preprocess.hpp>
 #include <random>
 
-std::random_device rd;
-std::mt19937 gen(rd());
+namespace neural_acd {
+
 std::uniform_real_distribution<> dist(0.0, 1.0);
 
-namespace acd_gen {
+Cuboid generate_cuboid(double min_width, double max_width) {
 
-std::vector<Cuboid> test_cuboids = {
-    Cuboid(0.8, 0.8, 0.8, {0.1, 0.0, 0.0}), Cuboid(1, 1, 0.1, {0, 0.2, 0.2}),
-    Cuboid(1, 0.1, 1, {0, 0.3, 0.3}),
-    // Cuboid(0.3, 0.5, 0.1, {0.0, 0.1, 0.3}),
-    //  Cuboid(0.5, 0.5, 0.5, {0.0, 0.5, 0.0}),
-    //  Cuboid(0.5, 0.5, 0.5, {0.5, 0.5, 0.0}),
-};
-
-Cuboid generate_cuboid() {
-  double width = 0.05 + (0.5 - 0.05) * dist(gen); // Random between 0.05 and 0.5
-  double height = 0.05 + (0.5 - 0.05) * dist(gen);
-  double depth = 0.05 + (0.5 - 0.05) * dist(gen);
-  double x = (1 - width) * dist(gen);
-  double y = (1 - height) * dist(gen);
-  double z = (1 - depth) * dist(gen);
+  double width = min_width + (max_width - min_width) * dist(random_engine);
+  double height = min_width + (max_width - min_width) * dist(random_engine);
+  double depth = min_width + (max_width - min_width) * dist(random_engine);
+  double x = (1 - width) * dist(random_engine);
+  double y = (1 - height) * dist(random_engine);
+  double z = (1 - depth) * dist(random_engine);
   Vec3D pos = {x, y, z};
 
-  double num = dist(gen);
+  double num = dist(random_engine);
 
   Cuboid cuboid(width, height, depth, pos);
   return cuboid;
@@ -39,7 +31,8 @@ Cuboid generate_cuboid() {
 Mesh generate_cuboid_structure(int obj_num) {
   std::vector<Cuboid> parts = std::vector<Cuboid>();
   for (int i = 0; i < obj_num; ++i) {
-    Cuboid mesh = generate_cuboid();
+    Cuboid mesh = generate_cuboid(config.generation_cuboid_width_min,
+                                  config.generation_cuboid_width_max);
     update_decomposition(parts, mesh);
   }
 
@@ -80,18 +73,18 @@ Mesh generate_cuboid_structure(int obj_num) {
 //-----------------------------------------------------------
 
 Icosphere generate_sphere(double min_radius, double max_radius) {
-  double radius = dist(gen) * 0.5 + 0.1;
-  Vec3D pos = {radius + (1 - radius) * dist(gen),
-               radius + (1 - radius) * dist(gen),
-               radius + (1 - radius) * dist(gen)};
-  return Icosphere(radius, pos, 3);
+  double radius = min_radius + (max_radius - min_radius) * dist(random_engine);
+  Vec3D pos = {radius + (1 - 2 * radius) * dist(random_engine),
+               radius + (1 - 2 * radius) * dist(random_engine),
+               radius + (1 - 2 * radius) * dist(random_engine)};
+  return Icosphere(radius, pos, config.generation_icosphere_subdivs);
 }
 
-Mesh generate_sphere_structure(int obj_num, double min_radius,
-                               double max_radius) {
+Mesh generate_sphere_structure(int obj_num) {
   std::vector<Icosphere> parts;
   for (int i = 0; i < obj_num; ++i) {
-    Icosphere sphere = generate_sphere(min_radius, max_radius);
+    Icosphere sphere = generate_sphere(config.generation_sphere_radius_min,
+                                       config.generation_sphere_radius_max);
     update_decomposition(parts, sphere);
   }
 
@@ -110,28 +103,9 @@ Mesh generate_sphere_structure(int obj_num, double min_radius,
 
     vert_offset += part.vertices.size();
   }
+  manifold_preprocess(structure, config.remesh_res, config.remesh_threshold);
 
-  ManifoldPreprocess(structure, 50.0f, 0.05f);
   return structure;
 }
 
-Mesh test() {
-  Cuboid cub = Cuboid(0.5, 0.5, 0.5, {0.01, 0.01, 0.0});
-  std::vector<std::array<Vec3D, 4>> quad = {{{{{0.1, 0.1, 0.0}},
-                                              {{0.3, 0.1, 0.0}},
-                                              {{0.3, 0.3, 0.0}},
-                                              {{0.1, 0.3, 0.0}}}},
-                                            {{{{0.31, 0.31, 0.0}},
-                                              {{0.45, 0.31, 0.0}},
-                                              {{0.45, 0.45, 0.0}},
-                                              {{0.31, 0.45, 0.0}}}}};
-  cub.cut_face("-", 2, quad);
-  Mesh mesh;
-  mesh.vertices = cub.vertices;
-  mesh.triangles = cub.triangles;
-  return mesh;
-}
-
-void set_seed(unsigned int seed) { gen.seed(seed); }
-
-} // namespace acd_gen
+} // namespace neural_acd

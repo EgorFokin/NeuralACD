@@ -1,68 +1,27 @@
-#include "mesh.hpp"
+#include "core.hpp"
 #include <QuickHull.hpp>
 #include <algorithm>
+#include <boost/random/sobol.hpp>
+#include <boost/random/uniform_01.hpp>
+#include <boost/random/variate_generator.hpp>
 #include <btConvexHullComputer.h>
 #include <cmath>
 #include <iostream>
 #include <random>
-#include <sobol.hpp>
 #include <stdexcept>
 
-namespace acd_gen {
+namespace neural_acd {
 
-std::random_device rd;
-Vec3D operator+(const Vec3D &a, const Vec3D &b) {
-  return {a[0] + b[0], a[1] + b[1], a[2] + b[2]};
-}
-Vec3D operator-(const Vec3D &a, const Vec3D &b) {
-  return {a[0] - b[0], a[1] - b[1], a[2] - b[2]};
-}
-Vec3D operator*(const Vec3D &v, double scalar) {
-  return {v[0] * scalar, v[1] * scalar, v[2] * scalar};
-}
-Vec3D operator/(const Vec3D &v, double scalar) {
-  if (scalar == 0) {
-    throw std::runtime_error("Division by zero in vector division");
-  }
-  return {v[0] / scalar, v[1] / scalar, v[2] / scalar};
-}
+boost::random::sobol sobol_engine(2);
+boost::uniform_01<double> uniform_dist;
+boost::variate_generator<boost::random::sobol &, boost::uniform_01<double>>
+    sobol_gen(sobol_engine, uniform_dist);
 
-double vector_length(const Vec3D &v) {
-  return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-}
-
-Vec3D normalize_vector(const Vec3D &v) {
-  double length = vector_length(v);
-  if (length == 0) {
-    throw std::runtime_error("Cannot normalize a zero-length vector");
-  }
-  return {v[0] / length, v[1] / length, v[2] / length};
-}
-
-Vec3D slerp(const Vec3D &a, const Vec3D &b, double t) {
-  double dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-  dot = std::clamp(dot, -1.0, 1.0); // Ensure dot product is in valid range
-  double theta = std::acos(dot) * t;
-  Vec3D relative_vec = b - a * dot;
-  relative_vec = normalize_vector(relative_vec);
-  return a * std::cos(theta) + relative_vec * std::sin(theta);
-}
-
-double Area(Vec3D p0, Vec3D p1, Vec3D p2) {
-  return 0.5 * sqrt(pow(p1[0] * p0[1] - p2[0] * p0[1] - p0[0] * p1[1] +
-                            p2[0] * p1[1] + p0[0] * p2[1] - p1[0] * p2[1],
-                        2) +
-                    pow(p1[0] * p0[2] - p2[0] * p0[2] - p0[0] * p1[2] +
-                            p2[0] * p1[2] + p0[0] * p2[2] - p1[0] * p2[2],
-                        2) +
-                    pow(p1[1] * p0[2] - p2[1] * p0[2] - p0[1] * p1[2] +
-                            p2[1] * p1[2] + p0[1] * p2[2] - p1[1] * p2[2],
-                        2));
-}
+void set_seed(unsigned int seed) { random_engine.seed(seed); }
 
 Mesh::Mesh() {}
 
-void Mesh::ComputeCH(Mesh &convex) const {
+void Mesh::compute_ch(Mesh &convex) const {
   /* fast convex hull algorithm */
   bool flag = true;
   quickhull::QuickHull<float> qh; // Could be double as well
@@ -76,7 +35,7 @@ void Mesh::ComputeCH(Mesh &convex) const {
   auto hull = qh.getConvexHull(pointCloud, true, false, flag);
   if (!flag) {
     // backup convex hull algorithm, stable but slow
-    ComputeVCH(convex);
+    compute_vch(convex);
     return;
   }
   const auto &indexBuffer = hull.getIndexBuffer();
@@ -91,7 +50,7 @@ void Mesh::ComputeCH(Mesh &convex) const {
   }
 }
 
-void Mesh::ComputeVCH(Mesh &convex) const {
+void Mesh::compute_vch(Mesh &convex) const {
   btConvexHullComputer ch;
   ch.compute(vertices, -1.0, -1.0);
   for (int32_t v = 0; v < ch.vertices.size(); v++) {
@@ -114,29 +73,30 @@ void Mesh::ComputeVCH(Mesh &convex) const {
   }
 }
 
-void Mesh::ExtractPointSet(std::vector<Vec3D> &samples,
-                           std::vector<int> &sample_tri_ids, unsigned int seed,
-                           size_t resolution, double base, bool flag,
-                           Plane plane) {
+void Mesh::extract_point_set(std::vector<Vec3D> &samples,
+                             std::vector<int> &sample_tri_ids,
+                             size_t resolution, double base, bool flag,
+                             Plane plane) {
   if (resolution == 0)
     return;
   double aObj = 0;
   for (int i = 0; i < (int)triangles.size(); i++) {
-    aObj += Area(vertices[triangles[i][0]], vertices[triangles[i][1]],
-                 vertices[triangles[i][2]]);
+    aObj += triangle_area(vertices[triangles[i][0]], vertices[triangles[i][1]],
+                          vertices[triangles[i][2]]);
   }
 
   if (base != 0)
     resolution = size_t(max(1000, int(resolution * (aObj / base))));
 
   for (int i = 0; i < (int)triangles.size(); i++) {
-    if (flag && plane.Side(vertices[triangles[i][0]], 1e-3) == 0 &&
-        plane.Side(vertices[triangles[i][1]], 1e-3) == 0 &&
-        plane.Side(vertices[triangles[i][2]], 1e-3) == 0) {
+    if (flag && plane.side(vertices[triangles[i][0]], 1e-3) == 0 &&
+        plane.side(vertices[triangles[i][1]], 1e-3) == 0 &&
+        plane.side(vertices[triangles[i][2]], 1e-3) == 0) {
       continue;
     }
-    double area = Area(vertices[triangles[i][0]], vertices[triangles[i][1]],
-                       vertices[triangles[i][2]]);
+    double area =
+        triangle_area(vertices[triangles[i][0]], vertices[triangles[i][1]],
+                      vertices[triangles[i][2]]);
     int N;
     if ((size_t)triangles.size() > resolution && resolution)
       N = max(int(i % ((int)triangles.size() / resolution) == 0),
@@ -144,21 +104,17 @@ void Mesh::ExtractPointSet(std::vector<Vec3D> &samples,
     else
       N = max(int(i % 2 == 0), int(resolution / aObj * area));
     N = max(N, 1); // Ensure at least one sample per triangle
-    std::uniform_int_distribution<int> seeder(0, 1000);
-    int seed = seeder(rd);
-    float r[2];
     for (int k = 0; k < N; k++) {
       double a, b;
       if (k % 3 == 0) {
         std::uniform_real_distribution<double> uniform(0.0, 1.0);
         //// random sample
-        a = uniform(rd);
-        b = uniform(rd);
+        a = uniform(random_engine);
+        b = uniform(random_engine);
       } else {
         //// quasirandom sample
-        i4_sobol(2, &seed, r);
-        a = r[0];
-        b = r[1];
+        a = sobol_gen();
+        b = sobol_gen();
       }
 
       Vec3D v;
@@ -177,12 +133,12 @@ void Mesh::ExtractPointSet(std::vector<Vec3D> &samples,
   }
 }
 
-void Mesh::Clear() {
+void Mesh::clear() {
   vertices.clear();
   triangles.clear();
 }
 
-bool ComputeOverlapFace(Mesh &convex1, Mesh &convex2, Plane &plane) {
+bool compute_overlap_face(Mesh &convex1, Mesh &convex2, Plane &plane) {
   bool flag;
   for (int i = 0; i < (int)convex1.triangles.size(); i++) {
     Plane p;
@@ -203,7 +159,7 @@ bool ComputeOverlapFace(Mesh &convex1, Mesh &convex2, Plane &plane) {
 
     short side1 = 0;
     for (int j = 0; j < (int)convex1.vertices.size(); j++) {
-      short s = p.Side(convex1.vertices[j], 1e-8);
+      short s = p.side(convex1.vertices[j], 1e-8);
       if (s != 0) {
         side1 = s;
         flag = 1;
@@ -212,7 +168,7 @@ bool ComputeOverlapFace(Mesh &convex1, Mesh &convex2, Plane &plane) {
     }
 
     for (int j = 0; j < (int)convex2.vertices.size(); j++) {
-      short s = p.Side(convex2.vertices[j], 1e-8);
+      short s = p.side(convex2.vertices[j], 1e-8);
       if (!flag || s == side1) {
         flag = 0;
         break;
@@ -226,30 +182,30 @@ bool ComputeOverlapFace(Mesh &convex1, Mesh &convex2, Plane &plane) {
   return false;
 }
 
-void ExtractPointSet(Mesh &convex1, Mesh &convex2, std::vector<Vec3D> &samples,
-                     std::vector<int> &sample_tri_ids, unsigned int seed,
-                     size_t resolution) {
+void extract_point_set(Mesh &convex1, Mesh &convex2,
+                       std::vector<Vec3D> &samples,
+                       std::vector<int> &sample_tri_ids, size_t resolution) {
   std::vector<Vec3D> samples1, samples2;
   std::vector<int> sample_tri_ids1, sample_tri_ids2;
   double a1 = 0, a2 = 0;
   for (int i = 0; i < (int)convex1.triangles.size(); i++)
-    a1 += Area(convex1.vertices[convex1.triangles[i][0]],
-               convex1.vertices[convex1.triangles[i][1]],
-               convex1.vertices[convex1.triangles[i][2]]);
+    a1 += triangle_area(convex1.vertices[convex1.triangles[i][0]],
+                        convex1.vertices[convex1.triangles[i][1]],
+                        convex1.vertices[convex1.triangles[i][2]]);
   for (int i = 0; i < (int)convex2.triangles.size(); i++)
-    a2 += Area(convex2.vertices[convex2.triangles[i][0]],
-               convex2.vertices[convex2.triangles[i][1]],
-               convex2.vertices[convex2.triangles[i][2]]);
+    a2 += triangle_area(convex2.vertices[convex2.triangles[i][0]],
+                        convex2.vertices[convex2.triangles[i][1]],
+                        convex2.vertices[convex2.triangles[i][2]]);
 
   Plane overlap_plane;
-  bool flag = ComputeOverlapFace(convex1, convex2, overlap_plane);
+  bool flag = compute_overlap_face(convex1, convex2, overlap_plane);
 
-  convex1.ExtractPointSet(samples1, sample_tri_ids1, seed,
-                          size_t(a1 / (a1 + a2) * resolution), 1, flag,
-                          overlap_plane);
-  convex2.ExtractPointSet(samples2, sample_tri_ids2, seed,
-                          size_t(a2 / (a1 + a2) * resolution), 1, flag,
-                          overlap_plane);
+  convex1.extract_point_set(samples1, sample_tri_ids1,
+                            size_t(a1 / (a1 + a2) * resolution), 1, flag,
+                            overlap_plane);
+  convex2.extract_point_set(samples2, sample_tri_ids2,
+                            size_t(a2 / (a1 + a2) * resolution), 1, flag,
+                            overlap_plane);
 
   samples.insert(samples.end(), samples1.begin(), samples1.end());
   samples.insert(samples.end(), samples2.begin(), samples2.end());
@@ -260,4 +216,32 @@ void ExtractPointSet(Mesh &convex1, Mesh &convex2, std::vector<Vec3D> &samples,
   for (int i = 0; i < (int)sample_tri_ids2.size(); i++)
     sample_tri_ids.push_back(sample_tri_ids2[i] + N);
 }
-} // namespace acd_gen
+
+void LoadingBar::step() {
+  string bar;
+  bar += "\r" + message + " [";
+  int pos = (current_step * bar_length) / total_steps;
+  for (int i = 0; i < bar_length; ++i) {
+    if (i < pos)
+      bar += "=";
+    else
+      bar += " ";
+  }
+  bar +=
+      "] " + std::to_string(current_step) + "/" + std::to_string(total_steps);
+  std::cout << bar;
+  std::cout.flush();
+  current_step++;
+}
+
+void LoadingBar::finish() {
+  std::cout << "\r" + message + " [";
+  for (int i = 0; i < bar_length; ++i) {
+    if (i < bar_length)
+      std::cout << "=";
+    else
+      std::cout << " ";
+  }
+  std::cout << "] " << total_steps << "/" << total_steps << std::endl;
+}
+} // namespace neural_acd

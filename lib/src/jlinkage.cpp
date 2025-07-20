@@ -1,6 +1,7 @@
 #include <Eigen/Dense>
 #include <algorithm>
 #include <cmath>
+#include <core.hpp>
 #include <fstream>
 #include <iostream>
 #include <jlinkage.hpp>
@@ -9,9 +10,11 @@
 
 using namespace std;
 
-namespace acd_gen {
-JLinkage::JLinkage(double sigma_, int num_samples_, double threshold_)
-    : sigma(sigma_), num_samples(num_samples_), threshold(threshold_) {}
+namespace neural_acd {
+JLinkage::JLinkage(double sigma_, int num_samples_, double threshold_,
+                   int outlier_threshold_)
+    : sigma(sigma_), num_samples(num_samples_), threshold(threshold_),
+      outlier_threshold(outlier_threshold_) {}
 
 void JLinkage::set_points(const vector<Vec3D> &pts) {
   points = pts;
@@ -43,14 +46,12 @@ void JLinkage::calculate_distances() {
 }
 
 void JLinkage::sample_triplet(int &i1, int &i2, int &i3) {
-  static random_device rd;
-  static mt19937 gen(rd());
   uniform_int_distribution<> dis(0, points.size() - 1);
 
-  i1 = dis(gen);
+  i1 = dis(random_engine);
   discrete_distribution<> dis2(sample_probs[i1].begin(),
                                sample_probs[i1].end());
-  i2 = dis2(gen);
+  i2 = dis2(random_engine);
 
   vector<double> prob3(points.size(), 0.0);
   for (int i = 0; i < points.size(); ++i) {
@@ -60,12 +61,12 @@ void JLinkage::sample_triplet(int &i1, int &i2, int &i3) {
   for (auto &p : prob3)
     p /= sum;
   discrete_distribution<> dis3(prob3.begin(), prob3.end());
-  i3 = dis3(gen);
+  i3 = dis3(random_engine);
 }
 
 void JLinkage::calculate_preference_sets() {
   int N = points.size();
-  preference_set = BoolMat(N, BoolVec(num_samples, false));
+  preference_set = detail::BoolMat(N, detail::BoolVec(num_samples, false));
 
   for (int i = 0; i < num_samples; ++i) {
     int i1, i2, i3;
@@ -74,16 +75,16 @@ void JLinkage::calculate_preference_sets() {
 
     Vec3D v1 = {p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]};
     Vec3D v2 = {p3[0] - p1[0], p3[1] - p1[1], p3[2] - p1[2]};
-    Vec3D n = CrossProduct(v1, v2);
+    Vec3D n = cross_product(v1, v2);
     double n_norm = vector_length(n);
     if (n_norm == 0)
       continue;
     for (double &c : n)
       c /= n_norm;
-    double d = -DotProduct(n, p1);
+    double d = -dot(n, p1);
 
     for (int j = 0; j < N; ++j) {
-      double dist = abs(DotProduct(points[j], n) + d);
+      double dist = abs(dot(points[j], n) + d);
       if (dist < threshold) {
         preference_set[j][i] = true;
       }
@@ -91,7 +92,8 @@ void JLinkage::calculate_preference_sets() {
   }
 }
 
-double JLinkage::jaccard_distance(const BoolVec &a, const BoolVec &b) {
+double JLinkage::jaccard_distance(const detail::BoolVec &a,
+                                  const detail::BoolVec &b) {
   int intersection = 0, union_count = 0;
   for (size_t i = 0; i < a.size(); ++i) {
     if (a[i] || b[i])
@@ -102,34 +104,54 @@ double JLinkage::jaccard_distance(const BoolVec &a, const BoolVec &b) {
   return 1.0 - (double)intersection / (union_count + 1e-8);
 }
 
+void print_dist_matrix(const vector<double> &dist_matrix, int N) {
+  int idx = 0;
+  for (int i = 1; i < N; ++i) {
+    for (int j = 0; j < i; ++j) {
+      cout << dist_matrix[idx] << " ";
+      idx++;
+    }
+    cout << endl;
+  }
+}
+
 vector<Plane> JLinkage::get_best_planes() {
   int N = preference_set.size();
-  vector<vector<double>> dist_matrix(N, vector<double>(N, 0.0));
-  for (int i = 0; i < N; ++i)
-    for (int j = 0; j < N; ++j)
-      dist_matrix[i][j] =
-          (i == j) ? numeric_limits<double>::infinity()
-                   : jaccard_distance(preference_set[i], preference_set[j]);
+  // N = 5;
+  vector<double> dist_matrix(N * (N - 1) >> 1, 0.0);
+
+  int i1, i2;
+  for (int i = 0; i < dist_matrix.size(); ++i) {
+    i1 = (int)(sqrt(8 * i + 1) - 1) >> 1;
+    int sum = (i1 * (i1 + 1)) >> 1;
+    i2 = i - sum;
+    i1++;
+    dist_matrix[i] = jaccard_distance(preference_set[i1], preference_set[i2]);
+  }
+  // print_dist_matrix(dist_matrix, N);
 
   vector<vector<int>> clusters(N);
   for (int i = 0; i < N; ++i)
     clusters[i] = {i};
 
+  LoadingBar loading_bar("Jlinkage", clusters.size());
   while (true) {
+    loading_bar.step();
     double min_val = numeric_limits<double>::infinity();
     int mini = -1, minj = -1;
 
     for (int i = 0; i < dist_matrix.size(); ++i)
-      for (int j = i + 1; j < dist_matrix[i].size(); ++j)
-        if (dist_matrix[i][j] < min_val) {
-          min_val = dist_matrix[i][j];
-          mini = i;
-          minj = j;
-        }
+      if (dist_matrix[i] < min_val) {
+        min_val = dist_matrix[i];
+        mini = (int)(sqrt(8 * i + 1) - 1) >> 1;
+        int sum = (mini * (mini + 1)) >> 1;
+        minj = i - sum;
+        mini++;
+      }
 
     if (min_val >= 1 || mini == -1 || minj == -1)
       break;
-    cout << clusters.size() << " " << min_val << endl;
+    // cout << clusters.size() << " " << min_val << endl;
 
     for (size_t k = 0; k < preference_set[mini].size(); ++k)
       preference_set[mini][k] =
@@ -140,38 +162,61 @@ vector<Plane> JLinkage::get_best_planes() {
     preference_set.erase(preference_set.begin() + minj);
     clusters.erase(clusters.begin() + minj);
 
-    for (int i = 0; i < dist_matrix.size(); ++i) {
-      dist_matrix[i].erase(dist_matrix[i].begin() + minj);
-    }
-    dist_matrix.erase(dist_matrix.begin() + minj);
+    // cout << dist_matrix.size() << ' ' << N << ' ' << minj << endl;
 
-    for (int k = 0; k < dist_matrix.size(); ++k) {
-      if (k == mini || k == minj)
-        continue;
-      dist_matrix[mini][k] = dist_matrix[k][mini] =
-          jaccard_distance(preference_set[mini], preference_set[k]);
+    // delete column j
+    int idx = dist_matrix.size() - (N - 1) + minj; // last row, column j
+    for (int i = 0; i < N - minj - 1; ++i) {
+      dist_matrix.erase(dist_matrix.begin() + idx);
+      // cout << "Deleted column " << minj << " at index " << idx << endl;
+      idx -= (N - 2 - i);
     }
+
+    // delete row j
+    idx = (minj * (minj - 1)) >> 1; // row j, first column
+    for (int i = idx + minj - 1; i > idx - 1; --i) {
+      dist_matrix.erase(dist_matrix.begin() + i);
+      // cout << "Deleted row " << minj << " at index " << i << endl;
+    }
+
+    if (mini > minj)
+      mini--; // adjust mini if it was after minj
+
+    N--;
+    // print_dist_matrix(dist_matrix, N);
+    // cout << dist_matrix.size() << ' ' << N << ' ' << mini << endl;
+    // update column i
+    idx = dist_matrix.size() - (N - 1) + mini; // last row, column i
+    for (int i = 0; i < N - mini - 1; ++i) {
+      i1 = (int)(sqrt(8 * idx + 1) - 1) >> 1;
+      int sum = (i1 * (i1 + 1)) >> 1;
+      i2 = idx - sum;
+      i1++;
+      dist_matrix[idx] =
+          jaccard_distance(preference_set[i1], preference_set[i2]);
+      // cout << "Updated row " << i1 << ", Column " << i2 << " At index " <<
+      // idx
+      //      << endl;
+      idx -= (N - 2 - i);
+    }
+
+    // update row i
+    idx = (mini * (mini - 1)) >> 1; // row i, first column
+    for (int i = idx; i < idx + mini; ++i) {
+      i1 = (int)(sqrt(8 * i + 1) - 1) >> 1;
+      int sum = (i1 * (i1 + 1)) >> 1;
+      i2 = i - sum;
+      i1++;
+      dist_matrix[i] = jaccard_distance(preference_set[i1], preference_set[i2]);
+      // cout << "Updated row " << i1 << ", Column " << i2 << " At index " << i
+      //      << endl;
+    }
+
+    // print_dist_matrix(dist_matrix, N);
   }
-
+  loading_bar.finish();
   vector<Plane> planes = cluster_planes(clusters);
-  cout << planes.size() << " planes" << endl;
-
-  // ofstream outFile1("points1.out");
-  // ofstream outFile2("points2.out");
-
-  // for (auto idx : clusters[0]) {
-  //   outFile1 << points[idx][0] << ' ' << points[idx][1] << ' ' <<
-  //   points[idx][2]
-  //            << '\n';
-  // }
-  // for (auto idx : clusters[1]) {
-  //   outFile2 << points[idx][0] << ' ' << points[idx][1] << ' ' <<
-  //   points[idx][2]
-  //            << '\n';
-  // }
-
-  // outFile1.close();
-  // outFile2.close();
+  // cout << "Found " << planes.size() << " planes" << endl;
 
   return planes;
 }
@@ -179,7 +224,7 @@ vector<Plane> JLinkage::get_best_planes() {
 vector<Plane> JLinkage::cluster_planes(vector<vector<int>> &clusters) {
   vector<Plane> planes;
   for (auto &cluster : clusters) {
-    if (cluster.size() < 20)
+    if (cluster.size() < outlier_threshold)
       continue;
 
     Vec3D centroid = {0.0, 0.0, 0.0};
@@ -205,10 +250,10 @@ vector<Plane> JLinkage::cluster_planes(vector<vector<int>> &clusters) {
     double a = normal[0];
     double b = normal[1];
     double c = normal[2];
-    double d = -DotProduct(normal, centroid);
+    double d = -dot(normal, centroid);
     Plane plane(a, b, c, d);
     planes.push_back(plane);
   }
   return planes;
 }
-} // namespace acd_gen
+} // namespace neural_acd

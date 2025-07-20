@@ -1,6 +1,6 @@
 #include <algorithm>
+#include <core.hpp>
 #include <cstdio>
-#include <mesh.hpp>
 #include <openvdb/Exceptions.h>
 #include <openvdb/openvdb.h>
 #include <openvdb/tools/MeshToVolume.h>
@@ -11,9 +11,9 @@
 
 using namespace openvdb;
 
-namespace acd_gen {
+namespace neural_acd {
 
-void SDFManifold(Mesh &input, Mesh &output, double scale, double level_set) {
+void sdf_manifold(Mesh &input, Mesh &output, double scale, double level_set) {
   std::vector<Vec3s> points;
   std::vector<Vec3I> tris;
   std::vector<Vec4I> quads;
@@ -40,7 +40,7 @@ void SDFManifold(Mesh &input, Mesh &output, double scale, double level_set) {
   std::vector<Vec4I> newQuads;
   tools::volumeToMesh(*sgrid, newPoints, newTriangles, newQuads, level_set);
 
-  output.Clear();
+  output.clear();
   for (unsigned int i = 0; i < newPoints.size(); ++i) {
     output.vertices.push_back({newPoints[i][0] / scale, newPoints[i][1] / scale,
                                newPoints[i][2] / scale});
@@ -58,9 +58,9 @@ void SDFManifold(Mesh &input, Mesh &output, double scale, double level_set) {
   }
 }
 
-void ManifoldPreprocess(Mesh &m, double scale, double level_set) {
+void manifold_preprocess(Mesh &m, double scale, double level_set) {
   Mesh tmp = m;
-  m.Clear();
-  SDFManifold(tmp, m, scale, level_set);
+  m.clear();
+  sdf_manifold(tmp, m, scale, level_set);
 }
-} // namespace acd_gen
+} // namespace neural_acd

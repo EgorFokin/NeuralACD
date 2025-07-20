@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(acd_gen)
+project(neural_acd)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -27,9 +27,9 @@ FetchContent_MakeAvailable(eigen)
 
 
 
-file(GLOB ACD_GEN_SOURCES "src/*.cpp") #all files under src
+file(GLOB neural_acd_SOURCES "src/*.cpp") #all files under src
 
-add_library(acd_gen STATIC ${ACD_GEN_SOURCES})
+add_library(neural_acd STATIC ${neural_acd_SOURCES})
 
 
 
@@ -49,11 +49,11 @@ target_include_directories(btConvexHull PUBLIC
     3rd/btConvexHull
 )
 
-target_include_directories(acd_gen PRIVATE
+target_include_directories(neural_acd PRIVATE
     3rd/CDT/CDT/include
 )
 
-target_link_libraries(acd_gen PRIVATE
+target_link_libraries(neural_acd PRIVATE
     quickhull
     btConvexHull
     openvdb_static
@@ -63,11 +63,11 @@ target_link_libraries(acd_gen PRIVATE
 include(boost)
 include(openvdb)
 
-target_include_directories(acd_gen PUBLIC ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(neural_acd PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
-pybind11_add_module(lib_acd_gen bindings.cpp)
+pybind11_add_module(lib_neural_acd bindings.cpp)
 
-#target_link_options(lib_acd_gen PRIVATE -Wl,--no-undefined)
+#target_link_options(lib_neural_acd PRIVATE -Wl,--no-undefined)
 
-target_link_libraries(lib_acd_gen PRIVATE acd_gen)
+target_link_libraries(lib_neural_acd PRIVATE neural_acd)
 

@@ -1,15 +1,15 @@
 #pragma once
 
+#include <core.hpp>
 #include <limits>
 #include <map>
-#include <mesh.hpp>
 
-namespace acd_gen {
+namespace neural_acd {
 
 MeshList clip(const Mesh mesh, Plane plane);
 MeshList multiclip(const Mesh mesh, const std::vector<Plane> &planes);
 
-inline bool SamePointDetect(Vec3D p0, Vec3D p1, float eps = 1e-5) {
+inline bool same_point_detect(Vec3D p0, Vec3D p1, float eps = 1e-5) {
   double dx, dy, dz;
   dx = fabs(p0[0] - p1[0]);
   dy = fabs(p0[1] - p1[1]);
@@ -19,8 +19,8 @@ inline bool SamePointDetect(Vec3D p0, Vec3D p1, float eps = 1e-5) {
   return false;
 }
 
-inline void addPoint(std::map<int, int> &vertex_map, std::vector<Vec3D> &border,
-                     Vec3D pt, int id, int &idx) {
+inline void add_point(std::map<int, int> &vertex_map,
+                      std::vector<Vec3D> &border, Vec3D pt, int id, int &idx) {
   if (vertex_map.find(id) == vertex_map.end()) {
     int flag = -1;
     for (int i = 0; i < (int)border.size(); i++) {
@@ -40,9 +40,9 @@ inline void addPoint(std::map<int, int> &vertex_map, std::vector<Vec3D> &border,
   }
 }
 
-inline void addEdgePoint(std::map<std::pair<int, int>, int> &edge_map,
-                         std::vector<Vec3D> &border, Vec3D pt, int id1, int id2,
-                         int &idx) {
+inline void add_edge_point(std::map<std::pair<int, int>, int> &edge_map,
+                           std::vector<Vec3D> &border, Vec3D pt, int id1,
+                           int id2, int &idx) {
   std::pair<int, int> edge1 = std::make_pair(id1, id2);
   std::pair<int, int> edge2 = std::make_pair(id2, id1);
   if (edge_map.find(edge1) == edge_map.end() &&
@@ -68,8 +68,8 @@ inline void addEdgePoint(std::map<std::pair<int, int>, int> &edge_map,
   }
 }
 
-inline bool FaceOverlap(std::map<int, bool> overlap_map,
-                        std::array<int, 3> triangle) {
+inline bool face_overlap(std::map<int, bool> overlap_map,
+                         std::array<int, 3> triangle) {
   int idx0 = triangle[0], idx1 = triangle[1], idx2 = triangle[2];
   if (overlap_map.find(idx0) == overlap_map.end() &&
       overlap_map.find(idx1) == overlap_map.end() &&
@@ -78,4 +78,4 @@ inline bool FaceOverlap(std::map<int, bool> overlap_map,
   return true;
 }
 
-} // namespace acd_gen
+} // namespace neural_acd

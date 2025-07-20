@@ -39,12 +39,12 @@ SOFTWARE.
 #include <vector>
 
 #include "clip.hpp"
-#include "mesh.hpp"
+#include "core.hpp"
 #include "nanoflann.hpp"
 using namespace std;
 using namespace nanoflann;
 
-namespace acd_gen {
+namespace neural_acd {
 
 template <typename T> struct PointCloud {
   struct Point {
@@ -79,8 +79,7 @@ template <typename T> struct PointCloud {
   }
 };
 
-template <typename T>
-void vec2PointCloud(PointCloud<T> &point, vector<Vec3D> V) {
+template <typename T> void vec2pc(PointCloud<T> &point, vector<Vec3D> V) {
   point.pts.resize(V.size());
   for (size_t i = 0; i < V.size(); i++) {
     point.pts[i].x = V[i][0];
@@ -89,7 +88,7 @@ void vec2PointCloud(PointCloud<T> &point, vector<Vec3D> V) {
   }
 }
 
-inline bool SameVectorDirection(Vec3D v, Vec3D w) {
+inline bool same_vector_dir(Vec3D v, Vec3D w) {
   if (v[0] * w[0] + v[1] * w[1] + v[2] * w[2] > 0)
     return true;
   return false;
@@ -131,19 +130,19 @@ double dist_point2segment(Vec3D pt, Vec3D s0, Vec3D s1, bool flag = false) {
   return sqrt(pow(valAB, 2) - pow(proj_dist, 2));
 }
 
-bool PointInTriangleBarycentric(Vec3D pt, Vec3D tri_pt0, Vec3D tri_pt1,
-                                Vec3D tri_pt2, Vec3D normal) {
+bool point_in_triangle(Vec3D pt, Vec3D tri_pt0, Vec3D tri_pt1, Vec3D tri_pt2,
+                       Vec3D normal) {
   // Compute vectors
   Vec3D v0 = tri_pt2 - tri_pt0;
   Vec3D v1 = tri_pt1 - tri_pt0;
   Vec3D v2 = pt - tri_pt0;
 
   // Compute dot products
-  double dot00 = DotProduct(v0, v0);
-  double dot01 = DotProduct(v0, v1);
-  double dot02 = DotProduct(v0, v2);
-  double dot11 = DotProduct(v1, v1);
-  double dot12 = DotProduct(v1, v2);
+  double dot00 = dot(v0, v0);
+  double dot01 = dot(v0, v1);
+  double dot02 = dot(v0, v2);
+  double dot11 = dot(v1, v1);
+  double dot12 = dot(v1, v2);
 
   // Compute barycentric coordinates
   double invDenom = 1.0 / (dot00 * dot11 - dot01 * dot01);
@@ -175,7 +174,7 @@ double dist_point2triangle(Vec3D pt, Vec3D tri_pt0, Vec3D tri_pt1,
 
   Vec3D proj_pt;
   Plane p = Plane(a, b, c, d);
-  short side = p.Side(pt, 1e-8);
+  short side = p.side(pt, 1e-8);
   if (side == 1) {
     proj_pt[0] = pt[0] - a * dist;
     proj_pt[1] = pt[1] - b * dist;
@@ -188,10 +187,10 @@ double dist_point2triangle(Vec3D pt, Vec3D tri_pt0, Vec3D tri_pt1,
     proj_pt = pt;
   }
 
-  Vec3D normal = CalFaceNormal(tri_pt0, tri_pt1, tri_pt2);
+  Vec3D normal = calc_face_normal(tri_pt0, tri_pt1, tri_pt2);
 
   // Check if projected point is inside triangle using barycentric coords
-  if (PointInTriangleBarycentric(proj_pt, tri_pt0, tri_pt1, tri_pt2, normal)) {
+  if (point_in_triangle(proj_pt, tri_pt0, tri_pt1, tri_pt2, normal)) {
     return dist;
   } else // if not within the triangle, we calculate the distance to 3 edges and
          // 3 points and use the min
@@ -220,8 +219,8 @@ double face_hausdorff_distance(Mesh &meshA, vector<Vec3D> &XA, vector<int> &idA,
   double cmax = 0;
 
   PointCloud<double> cloudA, cloudB;
-  vec2PointCloud(cloudA, XA);
-  vec2PointCloud(cloudB, XB);
+  vec2pc(cloudA, XA);
+  vec2pc(cloudB, XB);
 
   typedef KDTreeSingleIndexAdaptor<
       L2_Simple_Adaptor<double, PointCloud<double>>, PointCloud<double>,
@@ -297,4 +296,4 @@ double face_hausdorff_distance(Mesh &meshA, vector<Vec3D> &XA, vector<int> &idA,
 
   return cmax;
 }
-} // namespace acd_gen
+} // namespace neural_acd

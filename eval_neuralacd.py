@@ -8,7 +8,7 @@ import sys
 import os
 sys.path.append("lib/build")
 
-import lib_acd_gen
+import lib_neural_acd
 
 from utils.jlinkage import JLinkage
 
@@ -21,7 +21,7 @@ from scipy.spatial import cKDTree
 
 NUM_SAMPLES = 100
 
-CHECKPOINT="checkpoints/18,07,2025-23:02:09/best-model-ema_loss=0.1519765555858612.ckpt"
+CHECKPOINT="checkpoints/20,07,2025-11:53:02/best-model-ema_loss=0.21378971636295319.ckpt"
 
 def remove_outliers(points, threshold=0.05):
     # Remove points that have less than 3 neighbors within the threshold
@@ -32,11 +32,11 @@ def remove_outliers(points, threshold=0.05):
     return points[inliers]
 
 model = ACDModel().cuda()
-model.load_state_dict(torch.load(CHECKPOINT)["state_dict"])
+model.load_state_dict(torch.load(CHECKPOINT, weights_only=True)["state_dict"])
 model.eval()
 
 it = ACDgen(output_meshes=True).__iter__()
-lib_acd_gen.set_seed(44)
+lib_neural_acd.set_seed(42)
 #next(it)  
 
 for i in range(NUM_SAMPLES):
@@ -49,7 +49,7 @@ for i in range(NUM_SAMPLES):
         distances = torch.sigmoid(distances)  # Ensure distances are in [0, 1] range
         distances = distances.squeeze().cpu().numpy()
 
-    threshold = 0.4
+    threshold = 0.7
     distances[distances < threshold] = 0
     distances[distances >= threshold] = 1
 
@@ -57,32 +57,32 @@ for i in range(NUM_SAMPLES):
     cut_points = remove_outliers(cut_points, threshold=0.05)
 
 
+    # lib_neural_acd.config.merge_threshold = -1
+    cut_points_vector = lib_neural_acd.VecArray3d(cut_points.tolist())
+    decomposed = lib_neural_acd.process(structure,cut_points_vector)
 
-    cut_points_vector = lib_acd_gen.VecArray3d(cut_points.tolist())
-    decomposed = lib_acd_gen.process(structure,cut_points_vector)
+    scene = trimesh.Scene()
 
-    # scene = trimesh.Scene()
+    for mesh in decomposed:
+        triangles = np.asarray(mesh.triangles)
+        vertices = np.asarray(mesh.vertices)
+        if (triangles.shape[0] == 0 or vertices.shape[0] == 0):
+            continue
+        tmesh = trimesh.Trimesh(vertices=vertices, faces=triangles, process=True)
 
-    # for mesh in decomposed:
-    #     triangles = np.asarray(mesh.triangles)
-    #     vertices = np.asarray(mesh.vertices)
-    #     if (triangles.shape[0] == 0 or vertices.shape[0] == 0):
-    #         continue
-    #     tmesh = trimesh.Trimesh(vertices=vertices, faces=triangles, process=True)
+        #apply a random color to each mesh
+        tmesh.visual.face_colors = np.random.randint(0, 255, (3), dtype=np.uint8)
 
-    #     #apply a random color to each mesh
-    #     tmesh.visual.face_colors = np.random.randint(0, 255, (3), dtype=np.uint8)
+        scene.add_geometry(tmesh)
 
-    #     scene.add_geometry(tmesh)
-
-    # scene.export("decomposed.glb")
+    scene.export("decomposed.glb")
     
 
-    # tmesh = trimesh.Trimesh(vertices=structure.vertices, faces=structure.triangles, process=True)
-    # tmesh.export("structure.glb")
-    # scene.show()
+    tmesh = trimesh.Trimesh(vertices=structure.vertices, faces=structure.triangles, process=True)
+    tmesh.export("structure.glb")
+    scene.show()
 
-    # break
+    exit()
 
 
 total_concavity = 0.0

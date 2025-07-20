@@ -1,13 +1,13 @@
 #include <CDT.h>
 #include <CDTUtils.h>
 #include <cmath>
+#include <core.hpp>
 #include <cuboid.hpp>
 #include <iostream>
 #include <limits>
-#include <mesh.hpp>
 #include <unordered_map>
 
-namespace acd_gen {
+namespace neural_acd {
 
 Cuboid::Cuboid(double width, double height, double depth, Vec3D pos) {
   this->pos = pos;
@@ -421,4 +421,4 @@ void Cuboid::cut_face(std::string dir, int dim,
   }
 }
 
-} // namespace acd_gen
+} // namespace neural_acd

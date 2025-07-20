@@ -172,7 +172,7 @@ public:
    * @return true if the search should be continued, false if the results are
    * sufficient
    */
-  inline bool addPoint(DistanceType dist, IndexType index) {
+  inline bool add_point(DistanceType dist, IndexType index) {
     CountType i;
     for (i = count; i > 0; --i) {
 #ifdef NANOFLANN_FIRST_MATCH // If defined and two points have the same
@@ -246,7 +246,7 @@ public:
    * @return true if the search should be continued, false if the results are
    * sufficient
    */
-  inline bool addPoint(DistanceType dist, IndexType index) {
+  inline bool add_point(DistanceType dist, IndexType index) {
     if (dist < radius)
       m_indices_dists.push_back(std::make_pair(index, dist));
     return true;
@@ -1357,7 +1357,7 @@ public:
         DistanceType dist = distance.evalMetric(
             vec, index, (DIM > 0 ? DIM : BaseClassRef::dim));
         if (dist < worst_dist) {
-          if (!result_set.addPoint(dist, BaseClassRef::vind[i])) {
+          if (!result_set.add_point(dist, BaseClassRef::vind[i])) {
             // the resultset doesn't want to receive any more points, we're done
             // searching!
             return false;
@@ -1708,7 +1708,7 @@ public:
         DistanceType dist = distance.evalMetric(
             vec, index, (DIM > 0 ? DIM : BaseClassRef::dim));
         if (dist < worst_dist) {
-          if (!result_set.addPoint(
+          if (!result_set.add_point(
                   static_cast<typename RESULTSET::DistanceType>(dist),
                   static_cast<typename RESULTSET::IndexType>(
                       BaseClassRef::vind[i]))) {

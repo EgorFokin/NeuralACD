@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 #include "clip.hpp"
-#include "mesh.hpp"
+#include "core.hpp"
 #include <CDT.h>
 #include <CDTUtils.h>
 #include <cost.hpp>
@@ -31,7 +31,7 @@ SOFTWARE.
 #include <preprocess.hpp>
 #include <string>
 
-namespace acd_gen {
+namespace neural_acd {
 
 bool CreatePlaneRotationMatrix(std::vector<Vec3D> &border,
                                std::vector<std::pair<int, int>> border_edges,
@@ -86,7 +86,7 @@ bool CreatePlaneRotationMatrix(std::vector<Vec3D> &border,
 
   double t0, t1, t2;
   Vec3D p0 = border[idx0], p1 = border[idx1], p2 = border[idx2];
-  Vec3D normal = CalFaceNormal(p0, p1, p2);
+  Vec3D normal = calc_face_normal(p0, p1, p2);
 
   if (normal[0] * plane.a > 0 || normal[1] * plane.b > 0 ||
       normal[2] * plane.c > 0) {
@@ -220,7 +220,7 @@ void RemoveOutlierTriangles(std::vector<Vec3D> border,
 
   // for (int i = 0; i < (int)overlap.size(); i++)
   //   for (int j = 0; j < (int)border.size(); j++)
-  //     if (SamePointDetect(overlap[i], border[j]))
+  //     if (same_point_detect(overlap[i], border[j]))
   //       overlap_map[j + 1] = true;
 
   for (int i = 0; i < (int)border_edges.size(); i++) {
@@ -295,7 +295,7 @@ void RemoveOutlierTriangles(std::vector<Vec3D> border,
         remove_map[idx] = true;
       idx = edge_map[edge10].first;
       if (idx != -1 && !remove_map[idx] &&
-          !FaceOverlap(overlap_map, border_triangles[idx])) {
+          !face_overlap(overlap_map, border_triangles[idx])) {
         remove_map[idx] = true;
         final_triangles.push_back(border_triangles[idx]);
         for (int k = 0; k < 3; k++)
@@ -333,7 +333,7 @@ void RemoveOutlierTriangles(std::vector<Vec3D> border,
         remove_map[idx] = true;
       idx = edge_map[edge01].second;
       if (idx != -1 && !remove_map[idx] &&
-          !FaceOverlap(overlap_map, border_triangles[idx])) {
+          !face_overlap(overlap_map, border_triangles[idx])) {
         remove_map[idx] = true;
         final_triangles.push_back(border_triangles[idx]);
         for (int k = 0; k < 3; k++)
@@ -439,10 +439,10 @@ MeshList clip(const Mesh mesh, Plane plane) {
     p0 = mesh.vertices[id0];
     p1 = mesh.vertices[id1];
     p2 = mesh.vertices[id2];
-    short s0 = plane.Side(p0), s1 = plane.Side(p1), s2 = plane.Side(p2);
+    short s0 = plane.side(p0), s1 = plane.side(p1), s2 = plane.side(p2);
     short sum = s0 + s1 + s2;
     if (s0 == 0 && s1 == 0 && s2 == 0) {
-      s0 = s1 = s2 = plane.CutSide(p0, p1, p2, plane);
+      s0 = s1 = s2 = plane.cut_side(p0, p1, p2, plane);
       sum = s0 + s1 + s2;
       overlap.push_back(p0);
       overlap.push_back(p1);
@@ -461,20 +461,20 @@ MeshList clip(const Mesh mesh, Plane plane) {
       // the plane cross the triangle edge
       if (sum == 1) {
         if (s0 == 1 && s1 == 0 && s2 == 0) {
-          addPoint(vertex_map, border, p1, id1, idx);
-          addPoint(vertex_map, border, p2, id2, idx);
+          add_point(vertex_map, border, p1, id1, idx);
+          add_point(vertex_map, border, p2, id2, idx);
           if (vertex_map[id1] != vertex_map[id2])
             border_edges.push_back(
                 std::pair<int, int>(vertex_map[id1] + 1, vertex_map[id2] + 1));
         } else if (s0 == 0 && s1 == 1 && s2 == 0) {
-          addPoint(vertex_map, border, p2, id2, idx);
-          addPoint(vertex_map, border, p0, id0, idx);
+          add_point(vertex_map, border, p2, id2, idx);
+          add_point(vertex_map, border, p0, id0, idx);
           if (vertex_map[id2] != vertex_map[id0])
             border_edges.push_back(
                 std::pair<int, int>(vertex_map[id2] + 1, vertex_map[id0] + 1));
         } else if (s0 == 0 && s1 == 0 && s2 == 1) {
-          addPoint(vertex_map, border, p0, id0, idx);
-          addPoint(vertex_map, border, p1, id1, idx);
+          add_point(vertex_map, border, p0, id0, idx);
+          add_point(vertex_map, border, p1, id1, idx);
           if (vertex_map[id0] != vertex_map[id1])
             border_edges.push_back(
                 std::pair<int, int>(vertex_map[id0] + 1, vertex_map[id1] + 1));
@@ -492,20 +492,20 @@ MeshList clip(const Mesh mesh, Plane plane) {
       // the plane cross the triangle edge
       if (sum == -1) {
         if (s0 == -1 && s1 == 0 && s2 == 0) {
-          addPoint(vertex_map, border, p2, id2, idx);
-          addPoint(vertex_map, border, p1, id1, idx);
+          add_point(vertex_map, border, p2, id2, idx);
+          add_point(vertex_map, border, p1, id1, idx);
           if (vertex_map[id2] != vertex_map[id1])
             border_edges.push_back(
                 std::pair<int, int>(vertex_map[id2] + 1, vertex_map[id1] + 1));
         } else if (s0 == 0 && s1 == -1 && s2 == 0) {
-          addPoint(vertex_map, border, p0, id0, idx);
-          addPoint(vertex_map, border, p2, id2, idx);
+          add_point(vertex_map, border, p0, id0, idx);
+          add_point(vertex_map, border, p2, id2, idx);
           if (vertex_map[id0] != vertex_map[id2])
             border_edges.push_back(
                 std::pair<int, int>(vertex_map[id0] + 1, vertex_map[id2] + 1));
         } else if (s0 == 0 && s1 == 0 && s2 == -1) {
-          addPoint(vertex_map, border, p1, id1, idx);
-          addPoint(vertex_map, border, p0, id0, idx);
+          add_point(vertex_map, border, p1, id1, idx);
+          add_point(vertex_map, border, p0, id0, idx);
           if (vertex_map[id1] != vertex_map[id0])
             border_edges.push_back(
                 std::pair<int, int>(vertex_map[id1] + 1, vertex_map[id0] + 1));
@@ -515,16 +515,16 @@ MeshList clip(const Mesh mesh, Plane plane) {
     {
       bool f0, f1, f2;
       Vec3D pi0, pi1, pi2;
-      f0 = plane.IntersectSegment(p0, p1, pi0);
-      f1 = plane.IntersectSegment(p1, p2, pi1);
-      f2 = plane.IntersectSegment(p2, p0, pi2);
+      f0 = plane.intersect_segment(p0, p1, pi0);
+      f1 = plane.intersect_segment(p1, p2, pi1);
+      f2 = plane.intersect_segment(p2, p0, pi2);
 
       if (f0 && f1 && !f2) {
         // record the points
         // f0
-        addEdgePoint(edge_map, border, pi0, id0, id1, idx);
+        add_edge_point(edge_map, border, pi0, id0, id1, idx);
         // f1
-        addEdgePoint(edge_map, border, pi1, id1, id2, idx);
+        add_edge_point(edge_map, border, pi1, id1, id2, idx);
 
         // record the edges
         int f0_idx = edge_map[std::pair<int, int>(id0, id1)];
@@ -564,9 +564,9 @@ MeshList clip(const Mesh mesh, Plane plane) {
         }
       } else if (f1 && f2 && !f0) {
         // f1
-        addEdgePoint(edge_map, border, pi1, id1, id2, idx);
+        add_edge_point(edge_map, border, pi1, id1, id2, idx);
         // f2
-        addEdgePoint(edge_map, border, pi2, id2, id0, idx);
+        add_edge_point(edge_map, border, pi2, id2, id0, idx);
 
         // record the edges
         int f1_idx = edge_map[std::pair<int, int>(id1, id2)];
@@ -602,9 +602,9 @@ MeshList clip(const Mesh mesh, Plane plane) {
         }
       } else if (f2 && f0 && !f1) {
         // f2
-        addEdgePoint(edge_map, border, pi2, id2, id0, idx);
+        add_edge_point(edge_map, border, pi2, id2, id0, idx);
         // f0
-        addEdgePoint(edge_map, border, pi0, id0, id1, idx);
+        add_edge_point(edge_map, border, pi0, id0, id1, idx);
 
         int f0_idx = edge_map[std::pair<int, int>(id0, id1)];
         int f2_idx = edge_map[std::pair<int, int>(id2, id0)];
@@ -639,17 +639,17 @@ MeshList clip(const Mesh mesh, Plane plane) {
         }
       } else if (f0 && f1 && f2) {
         if (s0 == 0 || (s0 != 0 && s1 != 0 && s2 != 0 &&
-                        SamePointDetect(pi0, pi2))) // intersect at p0
+                        same_point_detect(pi0, pi2))) // intersect at p0
         {
           // f2 = f0 = p0
-          addPoint(vertex_map, border, p0, id0, idx);
+          add_point(vertex_map, border, p0, id0, idx);
           edge_map[std::pair<int, int>(id0, id1)] = vertex_map[id0];
           edge_map[std::pair<int, int>(id1, id0)] = vertex_map[id0];
           edge_map[std::pair<int, int>(id2, id0)] = vertex_map[id0];
           edge_map[std::pair<int, int>(id0, id2)] = vertex_map[id0];
 
           // f1
-          addEdgePoint(edge_map, border, pi1, id1, id2, idx);
+          add_edge_point(edge_map, border, pi1, id1, id2, idx);
           int f1_idx = edge_map[std::pair<int, int>(id1, id2)];
           int f0_idx = vertex_map[id0];
           if (s1 == 1) {
@@ -672,17 +672,17 @@ MeshList clip(const Mesh mesh, Plane plane) {
             }
           }
         } else if (s1 == 0 || (s0 != 0 && s1 != 0 && s2 != 0 &&
-                               SamePointDetect(pi0, pi1))) // intersect at p1
+                               same_point_detect(pi0, pi1))) // intersect at p1
         {
           // f0 = f1 = p1
-          addPoint(vertex_map, border, p1, id1, idx);
+          add_point(vertex_map, border, p1, id1, idx);
           edge_map[std::pair<int, int>(id0, id1)] = vertex_map[id1];
           edge_map[std::pair<int, int>(id1, id0)] = vertex_map[id1];
           edge_map[std::pair<int, int>(id1, id2)] = vertex_map[id1];
           edge_map[std::pair<int, int>(id2, id1)] = vertex_map[id1];
 
           // f2
-          addEdgePoint(edge_map, border, pi2, id2, id0, idx);
+          add_edge_point(edge_map, border, pi2, id2, id0, idx);
           int f1_idx = vertex_map[id1];
           int f2_idx = edge_map[std::pair<int, int>(id2, id0)];
           if (s0 == 1) {
@@ -705,17 +705,17 @@ MeshList clip(const Mesh mesh, Plane plane) {
             }
           }
         } else if (s2 == 0 || (s0 != 0 && s1 != 0 && s2 != 0 &&
-                               SamePointDetect(pi1, pi2))) // intersect at p2
+                               same_point_detect(pi1, pi2))) // intersect at p2
         {
           // f1 = f2 = p2
-          addPoint(vertex_map, border, p2, id2, idx);
+          add_point(vertex_map, border, p2, id2, idx);
           edge_map[std::pair<int, int>(id1, id2)] = vertex_map[id2];
           edge_map[std::pair<int, int>(id2, id1)] = vertex_map[id2];
           edge_map[std::pair<int, int>(id2, id0)] = vertex_map[id2];
           edge_map[std::pair<int, int>(id0, id2)] = vertex_map[id2];
 
           // f0
-          addEdgePoint(edge_map, border, pi0, id0, id1, idx);
+          add_edge_point(edge_map, border, pi0, id0, id1, idx);
           int f0_idx = edge_map[std::pair<int, int>(id0, id1)];
           int f1_idx = vertex_map[id2];
           if (s0 == 1) {
@@ -890,11 +890,11 @@ MeshList multiclip(const Mesh mesh, const std::vector<Plane> &planes) {
     for (int i = mesh_list.size() - 1; i >= 0; i--) {
       Mesh m = mesh_list[i];
       mesh_list.erase(mesh_list.begin() + i);
-      MeshList clipped = acd_gen::clip(m, plane);
+      MeshList clipped = neural_acd::clip(m, plane);
       for (auto &c : clipped) {
         if (c.triangles.empty() || c.vertices.empty())
           continue; // skip empty meshes
-        // ManifoldPreprocess(c);
+        // manifold_preprocess(c);
         mesh_list.push_back(c);
       }
     }
@@ -902,4 +902,4 @@ MeshList multiclip(const Mesh mesh, const std::vector<Plane> &planes) {
 
   return mesh_list;
 }
-} // namespace acd_gen
+} // namespace neural_acd
