@@ -16,6 +16,9 @@ import shutil
 import numpy as np
 from torch.utils.data import Subset
 from utils.ACDgen import ACDgen
+import argparse
+
+from utils.misc import load_config
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import CSVLogger
@@ -24,16 +27,23 @@ from pytorch_lightning.profilers import AdvancedProfiler
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Train Neural ACD model.")
+    parser.add_argument("--config", type=str, default="config/config.yaml", help="Path to the configuration file.")
+    args = parser.parse_args()
+
+    config = load_config(args.config)
+
+
     dataset = ACDgen()
 
-    train_loader = DataLoader(dataset, batch_size=4, num_workers=8)
+    train_loader = DataLoader(dataset, batch_size=config.model.batch_size, num_workers=config.model.num_workers)
 
 
     pl.seed_everything(42)
     
     torch.set_float32_matmul_precision('high')
 
-    model = ACDModel(learning_rate=1e-3)
+    model = ACDModel(learning_rate=config.model.learning_rate)
 
     #copy the model.py into checkpoint directory
     os.makedirs(f'checkpoints/{str(datetime.now().strftime("%d,%m,%Y-%H:%M:%S"))}/', exist_ok=True)
@@ -58,7 +68,7 @@ if __name__ == "__main__":
             callbacks=callbacks,
             log_every_n_steps=10,
             logger=logger,
-            max_steps=2000,
+            max_steps=config.model.max_steps,
             #profiler=profiler,
         )
 

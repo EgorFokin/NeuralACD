@@ -40,7 +40,7 @@ Cuboid::Cuboid(double width, double height, double depth, Vec3D pos) {
   }
 
   triangles = {
-      {0, 1, 2}, {2, 3, 0}, // Bottom
+      {2, 1, 0}, {0, 3, 2}, // Bottom
       {4, 5, 6}, {6, 7, 4}, // Top
       {0, 1, 5}, {5, 4, 0}, // Front
       {2, 3, 7}, {7, 6, 2}, // Back

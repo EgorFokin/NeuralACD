@@ -103,8 +103,6 @@ Mesh generate_sphere_structure(int obj_num) {
 
     vert_offset += part.vertices.size();
   }
-  manifold_preprocess(structure, config.remesh_res, config.remesh_threshold);
-
   return structure;
 }
 

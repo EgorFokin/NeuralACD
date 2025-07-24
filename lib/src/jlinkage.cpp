@@ -151,8 +151,6 @@ vector<Plane> JLinkage::get_best_planes() {
 
     if (min_val >= 1 || mini == -1 || minj == -1)
       break;
-    // cout << clusters.size() << " " << min_val << endl;
-
     for (size_t k = 0; k < preference_set[mini].size(); ++k)
       preference_set[mini][k] =
           preference_set[mini][k] && preference_set[minj][k];
@@ -162,13 +160,10 @@ vector<Plane> JLinkage::get_best_planes() {
     preference_set.erase(preference_set.begin() + minj);
     clusters.erase(clusters.begin() + minj);
 
-    // cout << dist_matrix.size() << ' ' << N << ' ' << minj << endl;
-
     // delete column j
     int idx = dist_matrix.size() - (N - 1) + minj; // last row, column j
     for (int i = 0; i < N - minj - 1; ++i) {
       dist_matrix.erase(dist_matrix.begin() + idx);
-      // cout << "Deleted column " << minj << " at index " << idx << endl;
       idx -= (N - 2 - i);
     }
 
@@ -176,15 +171,12 @@ vector<Plane> JLinkage::get_best_planes() {
     idx = (minj * (minj - 1)) >> 1; // row j, first column
     for (int i = idx + minj - 1; i > idx - 1; --i) {
       dist_matrix.erase(dist_matrix.begin() + i);
-      // cout << "Deleted row " << minj << " at index " << i << endl;
     }
 
     if (mini > minj)
       mini--; // adjust mini if it was after minj
 
     N--;
-    // print_dist_matrix(dist_matrix, N);
-    // cout << dist_matrix.size() << ' ' << N << ' ' << mini << endl;
     // update column i
     idx = dist_matrix.size() - (N - 1) + mini; // last row, column i
     for (int i = 0; i < N - mini - 1; ++i) {
@@ -194,9 +186,6 @@ vector<Plane> JLinkage::get_best_planes() {
       i1++;
       dist_matrix[idx] =
           jaccard_distance(preference_set[i1], preference_set[i2]);
-      // cout << "Updated row " << i1 << ", Column " << i2 << " At index " <<
-      // idx
-      //      << endl;
       idx -= (N - 2 - i);
     }
 
@@ -208,15 +197,13 @@ vector<Plane> JLinkage::get_best_planes() {
       i2 = i - sum;
       i1++;
       dist_matrix[i] = jaccard_distance(preference_set[i1], preference_set[i2]);
-      // cout << "Updated row " << i1 << ", Column " << i2 << " At index " << i
-      //      << endl;
     }
 
     // print_dist_matrix(dist_matrix, N);
   }
   loading_bar.finish();
   vector<Plane> planes = cluster_planes(clusters);
-  // cout << "Found " << planes.size() << " planes" << endl;
+  cout << "Found " << planes.size() << " planes" << endl;
 
   return planes;
 }

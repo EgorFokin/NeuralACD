@@ -85,11 +85,10 @@ double multimerge_ch(Mesh &m, MeshList &meshs, MeshList &cvxs,
         costMatrix[idx] = INF;
       }
     }
-    // print_cost_mtx(costMatrix);
 
     size_t costSize = (size_t)cvxs.size();
-
     while (true) {
+      // print_cost_mtx(costMatrix);
       // Search for lowest cost
       double bestCost = INF;
       const int32_t addr = find_min_element(costMatrix, &bestCost, 0,
@@ -110,6 +109,7 @@ double multimerge_ch(Mesh &m, MeshList &meshs, MeshList &cvxs,
           (static_cast<int32_t>(sqrt(1 + (8 * addr))) - 1) >> 1;
       const size_t p1 = addrI + 1;
       const size_t p2 = addr - ((addrI * (addrI + 1)) >> 1);
+      // printf("%ld\n", cvxs.size());
       // printf("addr %ld, addrI %ld, p1 %ld, p2 %ld\n", addr, addrI, p1, p2);
 
       // Make the lowest cost row and column into a new hull
@@ -129,7 +129,7 @@ double multimerge_ch(Mesh &m, MeshList &meshs, MeshList &cvxs,
         if (dist < threshold) {
           Mesh combinedCH;
           merge_ch(cvxs[p2], cvxs[i], combinedCH);
-          costMatrix[rowIdx] = compute_rv(cvxs[p2], cvxs[i], combinedCH);
+          costMatrix[rowIdx++] = compute_rv(cvxs[p2], cvxs[i], combinedCH);
         } else
           costMatrix[rowIdx++] = INF;
       }
@@ -267,16 +267,18 @@ void separate_disjoint(MeshList &parts) {
   parts.insert(parts.end(), new_parts.begin(), new_parts.end());
 }
 
-void write_stats(double concavity, int n_parts) {
-  ofstream stats_file("stats.txt", ios::app);
+void write_stats(std::string stats_file, double concavity, int n_parts) {
+  ofstream f(stats_file, ios::app);
 
-  stats_file << to_string(concavity) << ";";
-  stats_file << to_string(n_parts) << "\n";
-  stats_file.close();
+  f << to_string(concavity) << ";";
+  f << to_string(n_parts) << "\n";
+  f.close();
 }
 
-MeshList process(Mesh mesh, vector<Vec3D> cut_points) {
+MeshList process(Mesh mesh, vector<Vec3D> cut_points, std::string stats_file) {
   // cout << cut_points.size() << " cut points provided." << endl;
+
+  mesh.normalize(cut_points); // normalize the mesh and cut points
 
   MeshList parts;
   if (cut_points.size() != 0) {
@@ -326,9 +328,13 @@ MeshList process(Mesh mesh, vector<Vec3D> cut_points) {
   cout << "Final concavity: " << h << endl;
   cout << "Number of parts: " << cvxs.size() << endl;
 
-  write_stats(h, cvxs.size());
+  if (!stats_file.empty())
+    write_stats(stats_file, h, cvxs.size());
 
   // cvxs.push_back(hull);
+
+  if (config.process_output_parts)
+    return parts;
   return cvxs;
 }
 

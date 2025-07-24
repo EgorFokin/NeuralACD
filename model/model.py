@@ -95,7 +95,7 @@ class ACDModel(pl.LightningModule):
 
         
     
-    def forward(self, pointcloud):
+    def forward(self, pointcloud, apply_sigmoid=False):
         r"""
             Forward pass of the network
 
@@ -120,12 +120,16 @@ class ACDModel(pl.LightningModule):
                 l_xyz[i - 1], l_xyz[i], l_features[i - 1], l_features[i]
             )
 
-        return self.fc_layer(l_features[0])
+        fc_out = self.fc_layer(l_features[0])
+        fc_out = fc_out.squeeze(1)  # (B, N)
+
+        if apply_sigmoid:
+            fc_out = torch.sigmoid(fc_out)
+
+        return fc_out
 
     
     def compute_loss(self, pred, target):
-        pred = pred.squeeze(1)
-
         #loss = F.mse_loss(pred, target)
         loss = self.loss(pred, target)
         
@@ -143,7 +147,6 @@ class ACDModel(pl.LightningModule):
         self.ema_loss = ema_loss = alpha * loss + (1 - alpha) * self.previous_ema_loss
         self.previous_ema_loss = ema_loss
         self.log('ema_loss', ema_loss, prog_bar=True)
-        
 
         return loss
     

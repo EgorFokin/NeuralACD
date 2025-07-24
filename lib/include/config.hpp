@@ -22,6 +22,8 @@ public:
   double jlinkage_threshold;
   int jlinkage_outlier_threshold;
 
+  bool process_output_parts;
+
   Config() {
     generation_cuboid_width_min = 0.1;
     generation_cuboid_width_max = 0.5;
@@ -42,6 +44,8 @@ public:
     jlinkage_num_samples = 10000;
     jlinkage_threshold = 0.1;
     jlinkage_outlier_threshold = 10;
+
+    process_output_parts = false;
   }
 };
 

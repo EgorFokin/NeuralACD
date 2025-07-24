@@ -1,0 +1,35 @@
+name: neural_acd
+version: v1.0
+
+general:
+  cut_point_threshold: 0.3
+
+model:
+  batch_size: 4
+  learning_rate: 1e-3
+  max_steps: 2000
+  num_workers: 8
+
+lib:
+  generation:
+    cuboid:
+      width_min: 0.1
+      width_max: 0.5
+    sphere:
+      radius_min: 0.1
+      radius_max: 0.25
+      subdivs: 3
+
+  pcd_res: 3000
+  remesh:
+    resolution: 50
+    threshold: 0.05
+
+  cost_rv_k: 0.03
+  merge_threshold: 0.04
+
+  jlinkage:
+    sigma: 0.1
+    num_samples: 10000
+    threshold: 0.1
+    outlier_threshold: 10

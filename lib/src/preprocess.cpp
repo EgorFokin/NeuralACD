@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <core.hpp>
 #include <cstdio>
+#include <iostream>
 #include <openvdb/Exceptions.h>
 #include <openvdb/openvdb.h>
 #include <openvdb/tools/MeshToVolume.h>

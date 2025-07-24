@@ -138,6 +138,49 @@ void Mesh::clear() {
   triangles.clear();
 }
 
+void Mesh::normalize() {
+  if (vertices.empty())
+    return;
+  Vec3D min = vertices[0], max = vertices[0];
+  for (const auto &v : vertices) {
+    for (int i = 0; i < 3; i++) {
+      if (v[i] < min[i])
+        min[i] = v[i];
+      if (v[i] > max[i])
+        max[i] = v[i];
+    }
+  }
+  Vec3D center = {(min[0] + max[0]) / 2, (min[1] + max[1]) / 2,
+                  (min[2] + max[2]) / 2};
+  double scale = std::max({max[0] - min[0], max[1] - min[1], max[2] - min[2]});
+  for (auto &v : vertices) {
+    v = (v - center) / scale;
+  }
+}
+
+void Mesh::normalize(std::vector<Vec3D> &points) {
+  if (vertices.empty())
+    return;
+  Vec3D min = vertices[0], max = vertices[0];
+  for (const auto &v : vertices) {
+    for (int i = 0; i < 3; i++) {
+      if (v[i] < min[i])
+        min[i] = v[i];
+      if (v[i] > max[i])
+        max[i] = v[i];
+    }
+  }
+  Vec3D center = {(min[0] + max[0]) / 2, (min[1] + max[1]) / 2,
+                  (min[2] + max[2]) / 2};
+  double scale = std::max({max[0] - min[0], max[1] - min[1], max[2] - min[2]});
+  for (auto &v : vertices) {
+    v = (v - center) / scale;
+  }
+  for (auto &p : points) {
+    p = (p - center) / scale;
+  }
+}
+
 bool compute_overlap_face(Mesh &convex1, Mesh &convex2, Plane &plane) {
   bool flag;
   for (int i = 0; i < (int)convex1.triangles.size(); i++) {

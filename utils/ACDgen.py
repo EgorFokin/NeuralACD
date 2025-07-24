@@ -5,6 +5,8 @@ import numpy as np
 import lib_neural_acd
 import random
 
+from utils.misc import get_point_cloud
+
 class ACDgen(IterableDataset):
     def __init__(self, output_meshes=False):
         super().__init__()
@@ -75,14 +77,13 @@ class ACDgen(IterableDataset):
 
     def normalize_mesh(self, verts):
         verts = np.asarray(verts)
-        centroid = np.mean(verts, axis=0)
-        verts -= centroid
-        max_distance = np.max(np.linalg.norm(verts, axis=1))
-        verts /= max_distance
+        min_vals = verts.min(axis=0)
+        max_vals = verts.max(axis=0)
+        verts = (verts - min_vals) / (max_vals - min_vals)
         return verts
             
     def __iter__(self):
-        num_spheres = 4#random.randint(3, 8)
+        num_spheres = random.randint(3, 8)
         while True:
             structure_type = "sphere" #random.choice(['sphere', 'cuboid'])
             if structure_type == 'sphere':
@@ -91,28 +92,25 @@ class ACDgen(IterableDataset):
                 structure = lib_neural_acd.generate_cuboid_structure(num_spheres)
 
 
-            o3d_mesh = o3d.geometry.TriangleMesh()
             
             #print(verts)
-            o3d_mesh.vertices = o3d.utility.Vector3dVector(structure.vertices)  
-            o3d_mesh.triangles = o3d.utility.Vector3iVector(structure.triangles)
-
-            pcd = o3d_mesh.sample_points_uniformly(number_of_points=10000)
+            pcd = get_point_cloud(structure, num_points=10000)
             
             distances = self.get_distances(np.asarray(pcd.points), structure.cut_verts)
 
-            # self.apply_random_transform(pcd)
-            # self.apply_random_rotation(pcd)
-            # self.apply_gaussian_filter(pcd,sigma=0.1,radius=random.uniform(0.01, 0.15))
+            self.apply_random_transform(pcd)
+            self.apply_random_rotation(pcd)
+            self.apply_gaussian_filter(pcd,sigma=0.1,radius=random.uniform(0.01, 0.15))
             
-            # points = self.normalize_mesh(pcd.points)
-            points = np.asarray(pcd.points)
+            points = self.normalize_mesh(pcd.points)
+            # points = np.asarray(pcd.points)
 
             points = torch.tensor(points, dtype=torch.float32)
             distances = torch.tensor(distances, dtype=torch.float32)
-            distances = 1 - (torch.clamp(distances, 0.01, 0.035)-0.01)*40.0  # Scale distances to [0, 1] range
+            distances = 1 - (torch.clamp(distances, 0.01, 0.02)-0.01)*100.0  # Scale distances to [0, 1] range
 
             if self.output_meshes:
+                lib_neural_acd.preprocess(structure, 50.0, 0.05)
                 yield points, distances, structure
             else:
                 yield points, distances

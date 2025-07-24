@@ -46,6 +46,8 @@ public:
                          std::vector<int> &sample_tri_ids, size_t resolution,
                          double base = 0.0, bool flag = false,
                          Plane plane = Plane());
+  void normalize();
+  void normalize(std::vector<Vec3D> &points);
   void clear();
 };
 using MeshList = std::vector<Mesh>;
