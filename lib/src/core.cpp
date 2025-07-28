@@ -181,6 +181,24 @@ void Mesh::normalize(std::vector<Vec3D> &points) {
   }
 }
 
+void get_midpoint(const Vec3D &v1, const Vec3D &v2, Vec3D &mid) {
+  mid[0] = (v1[0] + v2[0]) / 2.0;
+  mid[1] = (v1[1] + v2[1]) / 2.0;
+  mid[2] = (v1[2] + v2[2]) / 2.0;
+}
+
+void subdivide_edge(const Vec3D &v1, const Vec3D &v2,
+                    std::vector<Vec3D> &new_vertices, int depth) {
+  Vec3D mid;
+  get_midpoint(v1, v2, mid);
+  new_vertices.push_back(mid);
+  if (depth == 0) {
+    return;
+  }
+  subdivide_edge(v1, mid, new_vertices, depth - 1);
+  subdivide_edge(mid, v2, new_vertices, depth - 1);
+}
+
 bool compute_overlap_face(Mesh &convex1, Mesh &convex2, Plane &plane) {
   bool flag;
   for (int i = 0; i < (int)convex1.triangles.size(); i++) {

@@ -30,7 +30,17 @@ class VHACD(Dataset):
         mesh = normalize_mesh(mesh)
         lib_neural_acd.preprocess(mesh, 50.0, 0.05)
         pcd = get_point_cloud(mesh)
-        points = torch.tensor(np.asarray(pcd.points), dtype=torch.float32)
+        points = pcd.points
+
+        tmesh = trimesh.Trimesh(vertices=np.asarray(mesh.vertices), faces=np.asarray(mesh.triangles))
+        curvature = trimesh.curvature.discrete_gaussian_curvature_measure(tmesh, points, radius=0.02)
+        points = np.hstack((points, curvature[:, np.newaxis]))
+
+        points = torch.tensor(points, dtype=torch.float32)
+
+
+
+
         return points, mesh
 
 

@@ -196,6 +196,9 @@ inline bool Plane::intersect_segment(Vec3D p1, Vec3D p2, Vec3D &pi,
   return false;
 }
 
+void subdivide_edge(const Vec3D &v1, const Vec3D &v2,
+                    std::vector<Vec3D> &new_vertices, int depth);
+
 void extract_point_set(Mesh &convex1, Mesh &convex2,
                        std::vector<Vec3D> &samples,
                        std::vector<int> &sample_tri_id, size_t resolution);

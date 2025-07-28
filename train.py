@@ -34,7 +34,7 @@ if __name__ == "__main__":
     config = load_config(args.config)
 
 
-    dataset = ACDgen()
+    dataset = ACDgen(config)
 
     train_loader = DataLoader(dataset, batch_size=config.model.batch_size, num_workers=config.model.num_workers)
 

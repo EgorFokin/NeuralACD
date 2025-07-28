@@ -8,7 +8,7 @@ from utils.ACDgen import ACDgen
 import trimesh
 import numpy as np
 import argparse
-from utils.misc import load_config, get_point_cloud, get_lib_mesh, normalize_mesh
+from utils.misc import *
 
 def show_geometry(meshes, save_path=None):
     scene = trimesh.Scene()
@@ -25,7 +25,12 @@ def show_geometry(meshes, save_path=None):
         scene.export(save_path)
 
 def decompose(mesh, cut_points, stats_file=""):
+    cut_points = cut_points[:, :3]  # Ensure cut points are 3D
+    #limit to 1000
+    if cut_points.shape[0] > 1000:
+        cut_points = cut_points[:1000]
     cut_points_vector = lib_neural_acd.VecArray3d(cut_points.tolist())
+    # lib_neural_acd.config.process_output_parts = True
     result = lib_neural_acd.process(mesh, cut_points_vector,stats_file)
 
     return result
@@ -52,21 +57,23 @@ if __name__ == "__main__":
         pcd = get_point_cloud(structure)
         points = np.asarray(pcd.points)
 
+        tmesh = trimesh.Trimesh(vertices=np.asarray(structure.vertices), faces=np.asarray(structure.triangles))
+        curvature = trimesh.curvature.discrete_gaussian_curvature_measure(tmesh, points, radius=0.02)
+        points = np.hstack((points, curvature[:, np.newaxis]))
+
     else:
-        it = ACDgen(output_meshes=True).__iter__()
+        it = ACDgen(config,output_meshes=True).__iter__()
         if args.seed is not None:
-            lib_neural_acd.set_seed(args.seed)
+            set_seed(args.seed)
         points, distances_t, structure = next(it)    
 
-        pcd = get_point_cloud(structure)
-
-        points = np.asarray(pcd.points)
+        points = np.asarray(points)
 
     if args.gt:
         distances = distances_t
     else:
         distances = mark_cuts(points, args.checkpoint, config)
-
+    
     parts = decompose(structure, points[distances == 1])
     show_geometry(parts, save_path="decomposed.glb")
 

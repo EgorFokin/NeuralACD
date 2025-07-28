@@ -4,13 +4,12 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..","lib", "build"))
 
 
 import coacd
-import trimesh
 import numpy as np
-import lib_acd_gen
 from utils.VHACD import VHACD
 from utils.ACDgen import ACDgen
 import os
 import argparse
+from utils.misc import *
 
 
 NUM_SAMPLES = 100
@@ -22,7 +21,10 @@ if __name__ == "__main__":
     parser.add_argument("--num-samples", type=int, default=NUM_SAMPLES, help="Number of samples to evaluate.")
     parser.add_argument("--threshold", type=float, default=0.05, help="Threshold for COACD.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility.")
+    parser.add_argument("--config", type=str, default="config/config.yaml", help="Path to the configuration file.")
     args = parser.parse_args()
+
+    config = load_config(args.config)
 
     if os.path.exists("stats.txt"):
         print("Stats file already exists. Please remove it before running the script.")
@@ -38,8 +40,8 @@ if __name__ == "__main__":
             result = coacd.run_coacd(mesh,threshold=args.threshold)
 
     else:
-        it = ACDgen(output_meshes=True).__iter__()
-        lib_acd_gen.set_seed(args.seed)
+        it = ACDgen(config,output_meshes=True).__iter__()
+        set_seed(args.seed)
         #next(it)  
 
         for i in range(NUM_SAMPLES):

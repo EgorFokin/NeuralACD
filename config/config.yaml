@@ -2,13 +2,21 @@ name: neural_acd
 version: v1.0
 
 general:
-  cut_point_threshold: 0.3
+  cut_point_threshold: 0.7
 
 model:
-  batch_size: 4
+  batch_size: 3
   learning_rate: 1e-3
   max_steps: 2000
   num_workers: 8
+
+generation:
+  min_parts: 3
+  max_parts: 6
+  random_rotation: true
+  random_scale: true
+  gaussian_filter: true
+  normalize_mesh: true
 
 lib:
   generation:
@@ -23,13 +31,13 @@ lib:
   pcd_res: 3000
   remesh:
     resolution: 50
-    threshold: 0.05
+    threshold: 0.01
 
   cost_rv_k: 0.03
-  merge_threshold: 0.04
+  merge_threshold: 0.05
 
   jlinkage:
-    sigma: 0.1
+    sigma: 0.2
     num_samples: 10000
-    threshold: 0.1
+    threshold: 0.05
     outlier_threshold: 10

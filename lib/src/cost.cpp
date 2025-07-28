@@ -49,6 +49,8 @@ double compute_rv(Mesh &cvx1, Mesh &cvx2, Mesh &cvxCH, double epsilon) {
   v2 = get_mesh_volume(cvx2);
   v3 = get_mesh_volume(cvxCH);
 
+  // cout << "Volumes: " << v1 << ", " << v2 << ", " << v3 << endl;
+  // cout << v1 + v2 - v3 << endl;
   double d = pow(3 * fabs(v1 + v2 - v3) / (4 * Pi), 1.0 / 3);
 
   return d;

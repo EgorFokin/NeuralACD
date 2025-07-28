@@ -126,23 +126,19 @@ double multimerge_ch(Mesh &m, MeshList &meshs, MeshList &cvxs,
       size_t rowIdx = ((p2 - 1) * p2) >> 1;
       for (size_t i = 0; (i < p2); ++i) {
         double dist = mesh_dist(cvxs[p2], cvxs[i]);
-        if (dist < threshold) {
-          Mesh combinedCH;
-          merge_ch(cvxs[p2], cvxs[i], combinedCH);
-          costMatrix[rowIdx++] = compute_rv(cvxs[p2], cvxs[i], combinedCH);
-        } else
-          costMatrix[rowIdx++] = INF;
+
+        Mesh combinedCH;
+        merge_ch(cvxs[p2], cvxs[i], combinedCH);
+        costMatrix[rowIdx++] = compute_rv(cvxs[p2], cvxs[i], combinedCH);
       }
 
       rowIdx += p2;
       for (size_t i = p2 + 1; (i < costSize); ++i) {
-        double dist = mesh_dist(cvxs[p2], cvxs[i]);
-        if (dist < threshold) {
-          Mesh combinedCH;
-          merge_ch(cvxs[p2], cvxs[i], combinedCH);
-          costMatrix[rowIdx] = compute_rv(cvxs[p2], cvxs[i], combinedCH);
-        } else
-          costMatrix[rowIdx] = INF;
+
+        Mesh combinedCH;
+        merge_ch(cvxs[p2], cvxs[i], combinedCH);
+        costMatrix[rowIdx] = compute_rv(cvxs[p2], cvxs[i], combinedCH);
+
         rowIdx += i;
       }
 
@@ -150,8 +146,10 @@ double multimerge_ch(Mesh &m, MeshList &meshs, MeshList &cvxs,
       const size_t erase_idx = ((costSize - 1) * costSize) >> 1;
       if (p1 < costSize) {
         rowIdx = (addrI * p1) >> 1;
+
         size_t top_row = erase_idx;
         for (size_t i = 0; i < p1; ++i) {
+
           if (i != p2) {
             costMatrix[rowIdx] = costMatrix[top_row];
           }
@@ -163,6 +161,7 @@ double multimerge_ch(Mesh &m, MeshList &meshs, MeshList &cvxs,
         rowIdx += p1;
         for (size_t i = p1 + 1; i < costSize; ++i) {
           costMatrix[rowIdx] = costMatrix[top_row];
+          top_row++;
           rowIdx += i;
         }
       }
@@ -261,7 +260,11 @@ void separate_disjoint(MeshList &parts) {
   MeshList new_parts;
   for (auto &part : parts) {
     MeshList res = separate_disjoint_step(part);
-    new_parts.insert(new_parts.end(), res.begin(), res.end());
+    for (auto &new_part : res) {
+      if (new_part.triangles.size() < 3)
+        continue; // skip degenerate parts
+      new_parts.push_back(new_part);
+    }
   }
   parts.clear();
   parts.insert(parts.end(), new_parts.begin(), new_parts.end());

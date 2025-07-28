@@ -10,7 +10,7 @@ from utils.ACDgen import ACDgen
 from model.model import ACDModel
 import lib_neural_acd
 import argparse
-from utils.misc import load_config, get_point_cloud
+from utils.misc import *
 
 def normalize_points(pcd):
     points = np.asarray(pcd.points)
@@ -28,10 +28,22 @@ def load_model(checkpoint):
     return model.cuda()
 
 def show_pcd(points, distances):
-    colormap = plt.get_cmap("jet")
-    colors = colormap(distances)[:, :3]  # Get RGB colors from the colormap
-    point_cloud = trimesh.points.PointCloud(points, colors=colors)
-    point_cloud.show()
+    distances = np.asarray(distances, dtype=np.float32)
+    points = points[:, :3]
+    norm = plt.Normalize(vmin=np.min(distances), vmax=np.max(distances))
+    base_colors = plt.get_cmap("jet")(norm(distances))[:, :3]
+
+    # Blend positive distances with orange
+    orange = np.array([1.0, 0.5, 0.0])
+    brightness = np.clip(distances, 0, 1)[:, None]
+    colors = base_colors * (1 - 0.5 * brightness) + orange * (0.5 * brightness)
+
+    # Set alpha based on distance
+    alpha = np.where(distances > 0, 1, 0.5)[:, None]
+    rgba = np.hstack([colors, alpha])
+
+    trimesh.points.PointCloud(points, colors=np.clip(rgba, 0, 1)).show()
+
 
 def get_curvature(mesh, points, radius):
     vertices = np.asarray(mesh.vertices)
@@ -75,7 +87,7 @@ def mark_cuts(points, checkpoint, config, no_threshold=False):
             end = min(start + config.model.batch_size, points.shape[0])
             batch_points = points[start:end]
     
-            pred = model(batch_points, apply_sigmoid=False)
+            pred = model(batch_points, apply_sigmoid=True)
 
             distances.append(pred)
         distances = torch.cat(distances, dim=0)
@@ -100,28 +112,39 @@ if __name__ == "__main__":
     parser.add_argument("--gt", action="store_true", help="Use ground truth points instead of model predictions.")
     parser.add_argument("--config", type=str, default="config/config.yaml", help="Path to the configuration file.")
     parser.add_argument("--no-threshold", action="store_true", help="Do not apply thresholding to cut points.")
-    parser.add_argument("--use-curvature", action="store_true", help="Use curvature instead of model predictions.")
+    parser.add_argument("--path", type=str, default="", help="Path to the mesh file.")
     
     args = parser.parse_args()
     
     config = load_config(args.config)
 
-    it = ACDgen(output_meshes=True).__iter__()
-    if args.seed is not None:
-        lib_neural_acd.set_seed(args.seed)
-    points, distances_t, structure = next(it)    
+    if args.path:
+        structure = trimesh.load(args.path, force='mesh')
+        structure = get_lib_mesh(structure)
+        structure = normalize_mesh(structure)
+        lib_neural_acd.preprocess(structure, 50.0, 0.05)
 
-    pcd = get_point_cloud(structure)
-    points = np.asarray(pcd.points)
+        pcd = get_point_cloud(structure)
+        points = np.asarray(pcd.points)
 
+        tmesh = trimesh.Trimesh(vertices=np.asarray(structure.vertices), faces=np.asarray(structure.triangles))
+        curvature = trimesh.curvature.discrete_gaussian_curvature_measure(tmesh, points, radius=0.02)
+        points = np.hstack((points, curvature[:, np.newaxis]))
+    else:
+        it = ACDgen(config,output_meshes=False).__iter__()
+        if args.seed is not None:
+            set_seed(args.seed)
+        points, distances_t = next(it)    
+
+
+    # print(distances_t)
     if args.gt:
         distances = distances_t
-    elif args.use_curvature:
-        distances = get_curvature(structure, points, radius=0.02)
     else:
         distances = mark_cuts(points, args.checkpoint, config, args.no_threshold )
 
-   
+    # mesh = trimesh.Trimesh(vertices=structure.vertices, faces=structure.triangles)
+    # mesh.show()
 
     show_pcd(points, distances)
 

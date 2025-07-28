@@ -2,6 +2,7 @@
 #include <config.hpp>
 #include <core.hpp>
 #include <generate.hpp>
+#include <jlinkage.hpp>
 #include <preprocess.hpp>
 #include <process.hpp>
 #include <pybind11/numpy.h>
@@ -90,4 +91,21 @@ PYBIND11_MODULE(lib_neural_acd, m) {
         py::arg("stats_file") = "");
   m.def("preprocess", &neural_acd::manifold_preprocess, py::arg("mesh"),
         py::arg("scale"), py::arg("level_set"));
+  m.def(
+      "get_best_planes",
+      [](std::vector<neural_acd::Vec3D> cut_points) {
+        neural_acd::JLinkage jlinkage(
+            neural_acd::config.jlinkage_sigma,
+            neural_acd::config.jlinkage_num_samples,
+            neural_acd::config.jlinkage_threshold,
+            neural_acd::config.jlinkage_outlier_threshold);
+        jlinkage.set_points(cut_points);
+        std::vector<neural_acd::Plane> planes = jlinkage.get_best_planes();
+        std::vector<std::array<double, 4>> result;
+        for (const auto &plane : planes) {
+          result.push_back({plane.a, plane.b, plane.c, plane.d});
+        }
+        return result;
+      },
+      py::arg("points"));
 }

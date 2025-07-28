@@ -104,27 +104,11 @@ bool check_aabb_collision(Cuboid &part, const Vec3D &vert, double eps) {
           part.min[2] + eps <= vert[2] && part.max[2] - eps >= vert[2]);
 }
 
-void get_midpoint(const Vec3D &v1, const Vec3D &v2, Vec3D &mid) {
-  mid[0] = (v1[0] + v2[0]) / 2.0;
-  mid[1] = (v1[1] + v2[1]) / 2.0;
-  mid[2] = (v1[2] + v2[2]) / 2.0;
-}
-
-void subdivide_edge(const Vec3D &v1, const Vec3D &v2,
-                    std::vector<Vec3D> &new_vertices, int depth) {
-  Vec3D mid;
-  get_midpoint(v1, v2, mid);
-  new_vertices.push_back(mid);
-  if (depth == 0) {
-    return;
-  }
-  subdivide_edge(v1, mid, new_vertices, depth - 1);
-  subdivide_edge(mid, v2, new_vertices, depth - 1);
-}
-
 // precondition: part collides with this cuboid
 void Cuboid::compute_cut_quads(Cuboid &part, double eps) {
   Vec3D v1, v2, v3, v4;
+  bool d1_mn_tch = 0, d2_mn_tch = 0, d1_mx_tch = 0,
+       d2_mx_tch = 0; // side touches
   bool found = false;
 
   for (int dim = 0; dim < 3; ++dim) {
@@ -150,6 +134,19 @@ void Cuboid::compute_cut_quads(Cuboid &part, double eps) {
            std::abs(min_d2 - max_d2) < 1e-3)) {
         // edges probably touch, not adjacent
         continue;
+      }
+
+      if (std::abs(part.min[d1] - min[d1]) < eps) {
+        d1_mn_tch = true;
+      }
+      if (std::abs(part.max[d1] - max[d1]) < eps) {
+        d1_mx_tch = true;
+      }
+      if (std::abs(part.min[d2] - min[d2]) < eps) {
+        d2_mn_tch = true;
+      }
+      if (std::abs(part.max[d2] - max[d2]) < eps) {
+        d2_mx_tch = true;
       }
 
       Vec3D base = {0.0, 0.0, 0.0};
@@ -182,10 +179,14 @@ void Cuboid::compute_cut_quads(Cuboid &part, double eps) {
   cut_quads.push_back(quad);
 
   std::vector<Vec3D> new_vertices;
-  subdivide_edge(v1, v2, new_vertices, 4);
-  subdivide_edge(v2, v3, new_vertices, 4);
-  subdivide_edge(v3, v4, new_vertices, 4);
-  subdivide_edge(v4, v1, new_vertices, 4);
+  if (!d2_mn_tch)
+    subdivide_edge(v1, v2, new_vertices, 4);
+  if (!d1_mx_tch)
+    subdivide_edge(v2, v3, new_vertices, 4);
+  if (!d2_mx_tch)
+    subdivide_edge(v3, v4, new_vertices, 4);
+  if (!d1_mn_tch)
+    subdivide_edge(v4, v1, new_vertices, 4);
 
   for (const auto &new_vertex : new_vertices) {
     cut_verts.push_back(new_vertex);

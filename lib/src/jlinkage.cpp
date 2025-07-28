@@ -62,6 +62,10 @@ void JLinkage::sample_triplet(int &i1, int &i2, int &i3) {
     p /= sum;
   discrete_distribution<> dis3(prob3.begin(), prob3.end());
   i3 = dis3(random_engine);
+
+  // cout << "Sampled triplet: " << i1 << ", " << i2 << ", " << i3 << endl;
+  // cout << "Probability of this point:" << sample_probs[i1][i2] << endl;
+  // cout << "Probability of this point: " << sample_probs[i1][i3] << endl;
 }
 
 void JLinkage::calculate_preference_sets() {

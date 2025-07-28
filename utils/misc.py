@@ -8,6 +8,11 @@ import numpy as np
 import open3d as o3d
 
 
+def set_seed(seed):
+    np.random.seed(seed)
+    lib_neural_acd.set_seed(seed)
+    
+
 def get_lib_mesh(mesh):
     vertices = lib_neural_acd.VecArray3d(mesh.vertices.tolist())
     triangles = lib_neural_acd.make_vecarray3i(mesh.faces.tolist())

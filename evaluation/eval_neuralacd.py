@@ -3,23 +3,20 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(os.path.join(os.path.dirname(__file__), "..","lib", "build"))
 
 import numpy as np
-import trimesh
 import torch
 import sys
 import os
 import tempfile
 import argparse
 import multiprocessing as mp
-import open3d as o3d
 
 import lib_neural_acd
 
 from utils.VHACD import VHACD
 from utils.ACDgen import ACDgen
-from model.model import ACDModel
-from utils.misc import load_config, get_point_cloud
-from scripts.mark_cuts import mark_cuts,show_pcd, get_curvature
-from scripts.decompose import decompose, show_geometry
+from utils.misc import *
+from scripts.mark_cuts import mark_cuts
+from scripts.decompose import decompose
 
 def process_sample(points, structure):
 
@@ -37,6 +34,7 @@ def process_sample(points, structure):
         res = decompose(mesh, points, temp_file.name)
         results = temp_file.readlines()[0]
         concavity, num_parts = map(float, results.strip().split(';'))
+        print(f"Concavity: {concavity}, Parts: {num_parts}")
         return concavity, num_parts
 
 
@@ -47,6 +45,7 @@ def evaluate(checkpoint, config, num_samples, num_workers=1, is_vhacd=False):
 
     if is_vhacd:
         dataset = VHACD()
+        num_samples = len(dataset)
         for i in range(len(dataset)):
             p, st = dataset[i]
             points.append(p)
@@ -55,7 +54,7 @@ def evaluate(checkpoint, config, num_samples, num_workers=1, is_vhacd=False):
         points = torch.stack(points, dim=0)
     else:
 
-        it = ACDgen(output_meshes=True).__iter__()
+        it = ACDgen(config,output_meshes=True).__iter__()
 
 
         # full_structures = []
@@ -64,10 +63,8 @@ def evaluate(checkpoint, config, num_samples, num_workers=1, is_vhacd=False):
 
             # full_structures.append(st)
 
-            pcd = get_point_cloud(st)
-
             structures.append([np.asarray(st.vertices), np.asarray(st.triangles)])
-            points.append(pcd.points)
+            points.append(p)
         
 
 
@@ -118,7 +115,7 @@ if __name__ == "__main__":
     lib_neural_acd.config.process_output_parts = True
 
     if args.seed is not None:
-        lib_neural_acd.set_seed(args.seed)
+        set_seed(args.seed)
 
 
     evaluate(args.checkpoint, config, args.num_samples, args.num_workers, args.vhacd)
