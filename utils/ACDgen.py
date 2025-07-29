@@ -48,7 +48,7 @@ class ACDgen(IterableDataset):
 
         pcd.points = o3d.utility.Vector3dVector(smoothed_points)
 
-    def apply_random_scale(self, pcd):
+    def apply_random_scale(self, pcd, structure):
         scale_x = np.random.uniform(0.5, 4.0)
         scale_y = np.random.uniform(0.5, 4.0)
         scale_z = np.random.uniform(0.5, 4.0)
@@ -63,8 +63,10 @@ class ACDgen(IterableDataset):
         points = points @ stretch_matrix.T
 
         pcd.points = o3d.utility.Vector3dVector(points)
+
+        structure.vertices = structure.vertices @ stretch_matrix.T
     
-    def apply_random_rotation(self, pcd):
+    def apply_random_rotation(self, pcd, structure):
         angle = np.random.uniform(0, 2 * np.pi)
         rotation_matrix = np.array([
             [np.cos(angle), -np.sin(angle), 0],
@@ -77,10 +79,13 @@ class ACDgen(IterableDataset):
 
         pcd.points = o3d.utility.Vector3dVector(points)
 
-    def normalize_mesh(self, points):
+        structure.vertices = structure.vertices @ rotation_matrix.T
+
+    def normalize_mesh(self, points, structure):
         min_vals = points.min(axis=0)
         max_vals = points.max(axis=0)
         points = (points - min_vals) / (max_vals - min_vals)
+        structure.vertices = lib_neural_acd.VecArray3d((np.asarray(structure.vertices) - min_vals) / (max_vals - min_vals))
         return points
             
     def __iter__(self):
@@ -101,19 +106,22 @@ class ACDgen(IterableDataset):
             distances = self.get_distances(np.asarray(pcd.points), structure.cut_verts)
 
             if self.config.generation.random_scale:
-                self.apply_random_scale(pcd)
+                self.apply_random_scale(pcd, structure)
             if self.config.generation.random_rotation:
-                self.apply_random_rotation(pcd)
+                self.apply_random_rotation(pcd,structure)
             if self.config.generation.gaussian_filter:
                 self.apply_gaussian_filter(pcd,sigma=0.1,radius=random.uniform(0.01, 0.15))
             
             points = np.asarray(pcd.points)
 
+            
             if self.config.generation.normalize_mesh:
-                points = self.normalize_mesh(points)
+                points = self.normalize_mesh(points,structure)
 
             mesh = trimesh.Trimesh(vertices=structure.vertices, faces=structure.triangles)
             curvature = trimesh.curvature.discrete_gaussian_curvature_measure(mesh, points, 0.02)
+
+
 
             #add curvature channel
             points = np.hstack((points, curvature[:, np.newaxis]))

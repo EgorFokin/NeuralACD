@@ -13,9 +13,9 @@ model:
 generation:
   min_parts: 3
   max_parts: 6
-  random_rotation: true
-  random_scale: true
-  gaussian_filter: true
+  random_rotation: false
+  random_scale: false
+  gaussian_filter: false
   normalize_mesh: true
 
 lib:

@@ -14,3 +14,4 @@ lib_acd_gen.cpython*
 lib/build/
 .vscode/
 stats.txt
+temp.csv
