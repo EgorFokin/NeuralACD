@@ -15,3 +15,4 @@ lib/build/
 .vscode/
 stats.txt
 temp.csv
+perf.data

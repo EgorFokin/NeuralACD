@@ -9,6 +9,7 @@
 #include <iostream>
 #include <random>
 #include <stdexcept>
+#include <unordered_set>
 
 namespace neural_acd {
 
@@ -76,59 +77,89 @@ void Mesh::compute_vch(Mesh &convex) const {
 void Mesh::extract_point_set(std::vector<Vec3D> &samples,
                              std::vector<int> &sample_tri_ids,
                              size_t resolution, double base, bool flag,
-                             Plane plane) {
-  if (resolution == 0)
+                             Plane plane, bool one_per_tri) {
+
+  if (triangles.empty() || vertices.empty()) {
     return;
-  double aObj = 0;
-  for (int i = 0; i < (int)triangles.size(); i++) {
-    aObj += triangle_area(vertices[triangles[i][0]], vertices[triangles[i][1]],
-                          vertices[triangles[i][2]]);
+  }
+
+  double aObj = 0.0;
+
+  std::vector<double> areas = std::vector<double>(triangles.size(), 0.0);
+  for (size_t i = 0; i < triangles.size(); i++) {
+    double area =
+        triangle_area(vertices[triangles[i][0]], vertices[triangles[i][1]],
+                      vertices[triangles[i][2]]);
+    areas[i] = area;
+    aObj += area;
   }
 
   if (base != 0)
     resolution = size_t(max(1000, int(resolution * (aObj / base))));
 
-  for (int i = 0; i < (int)triangles.size(); i++) {
-    if (flag && plane.side(vertices[triangles[i][0]], 1e-3) == 0 &&
-        plane.side(vertices[triangles[i][1]], 1e-3) == 0 &&
-        plane.side(vertices[triangles[i][2]], 1e-3) == 0) {
+  discrete_distribution<size_t> triangle_index_generator(areas.begin(),
+                                                         areas.end());
+
+  std::uniform_real_distribution<double> uniform_dist(0.0, 1.0);
+
+  std::unordered_set<size_t> sampled_tris;
+
+  int sampled = 0;
+
+  while (sampled < resolution) {
+
+    size_t tidx = triangle_index_generator(random_engine);
+
+    const auto &tri = triangles[tidx];
+
+    if (flag && plane.side(vertices[tri[0]], 1e-3) == 0 &&
+        plane.side(vertices[tri[1]], 1e-3) == 0 &&
+        plane.side(vertices[tri[2]], 1e-3) == 0) {
       continue;
     }
-    double area =
-        triangle_area(vertices[triangles[i][0]], vertices[triangles[i][1]],
-                      vertices[triangles[i][2]]);
-    int N;
-    if ((size_t)triangles.size() > resolution && resolution)
-      N = max(int(i % ((int)triangles.size() / resolution) == 0),
-              int(resolution / aObj * area));
-    else
-      N = max(int(i % 2 == 0), int(resolution / aObj * area));
-    N = max(N, 1); // Ensure at least one sample per triangle
-    for (int k = 0; k < N; k++) {
-      double a, b;
-      if (k % 3 == 0) {
-        std::uniform_real_distribution<double> uniform(0.0, 1.0);
-        //// random sample
-        a = uniform(random_engine);
-        b = uniform(random_engine);
-      } else {
-        //// quasirandom sample
-        a = sobol_gen();
-        b = sobol_gen();
-      }
 
-      Vec3D v;
-      v[0] = (1 - sqrt(a)) * vertices[triangles[i][0]][0] +
-             (sqrt(a) * (1 - b)) * vertices[triangles[i][1]][0] +
-             b * sqrt(a) * vertices[triangles[i][2]][0];
-      v[1] = (1 - sqrt(a)) * vertices[triangles[i][0]][1] +
-             (sqrt(a) * (1 - b)) * vertices[triangles[i][1]][1] +
-             b * sqrt(a) * vertices[triangles[i][2]][1];
-      v[2] = (1 - sqrt(a)) * vertices[triangles[i][0]][2] +
-             (sqrt(a) * (1 - b)) * vertices[triangles[i][1]][2] +
-             b * sqrt(a) * vertices[triangles[i][2]][2];
-      samples.push_back(v);
-      sample_tri_ids.push_back(i);
+    double a = uniform_dist(random_engine);
+    double b = uniform_dist(random_engine);
+
+    Vec3D v;
+    v[0] = (1 - sqrt(a)) * vertices[tri[0]][0] +
+           (sqrt(a) * (1 - b)) * vertices[tri[1]][0] +
+           b * sqrt(a) * vertices[tri[2]][0];
+    v[1] = (1 - sqrt(a)) * vertices[tri[0]][1] +
+           (sqrt(a) * (1 - b)) * vertices[tri[1]][1] +
+           b * sqrt(a) * vertices[tri[2]][1];
+    v[2] = (1 - sqrt(a)) * vertices[tri[0]][2] +
+           (sqrt(a) * (1 - b)) * vertices[tri[1]][2] +
+           b * sqrt(a) * vertices[tri[2]][2];
+    samples.push_back(v);
+    sample_tri_ids.push_back(tidx);
+    sampled_tris.insert(tidx);
+    sampled++;
+  }
+
+  if (one_per_tri) {
+    for (size_t i = 0; i < triangles.size(); i++) {
+      if (sampled_tris.find(i) == sampled_tris.end()) {
+
+        const auto &tri = triangles[i];
+
+        double a = uniform_dist(random_engine);
+        double b = uniform_dist(random_engine);
+
+        Vec3D v;
+        v[0] = (1 - sqrt(a)) * vertices[tri[0]][0] +
+               (sqrt(a) * (1 - b)) * vertices[tri[1]][0] +
+               b * sqrt(a) * vertices[tri[2]][0];
+        v[1] = (1 - sqrt(a)) * vertices[tri[0]][1] +
+               (sqrt(a) * (1 - b)) * vertices[tri[1]][1] +
+               b * sqrt(a) * vertices[tri[2]][1];
+        v[2] = (1 - sqrt(a)) * vertices[tri[0]][2] +
+               (sqrt(a) * (1 - b)) * vertices[tri[1]][2] +
+               b * sqrt(a) * vertices[tri[2]][2];
+
+        samples.push_back(v);
+        sample_tri_ids.push_back(i);
+      }
     }
   }
 }

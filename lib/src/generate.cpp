@@ -33,7 +33,17 @@ Mesh generate_cuboid_structure(int obj_num) {
   for (int i = 0; i < obj_num; ++i) {
     Cuboid mesh = generate_cuboid(config.generation_cuboid_width_min,
                                   config.generation_cuboid_width_max);
+    if (mesh.is_similar(parts, 0.05) ||
+        !(mesh.does_intersect(parts, 0) || parts.size() == 0)) {
+      i--;
+      continue;
+    }
+
     update_decomposition(parts, mesh);
+  }
+
+  if (parts.size() == 0) {
+    return generate_cuboid_structure(obj_num); // Retry if no parts generated
   }
 
   merge_adjacent_cuboids(parts);
@@ -85,6 +95,11 @@ Mesh generate_sphere_structure(int obj_num) {
   for (int i = 0; i < obj_num; ++i) {
     Icosphere sphere = generate_sphere(config.generation_sphere_radius_min,
                                        config.generation_sphere_radius_max);
+
+    if (parts.size() != 0 && !sphere.does_intersect(parts, 0)) {
+      i--;
+      continue;
+    }
     update_decomposition(parts, sphere);
   }
 

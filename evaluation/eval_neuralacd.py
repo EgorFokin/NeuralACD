@@ -44,7 +44,7 @@ def evaluate(checkpoint, config, num_samples, num_workers=1, is_vhacd=False):
 
 
     if is_vhacd:
-        dataset = VHACD()
+        dataset = VHACD(config)
         num_samples = len(dataset)
         for i in range(len(dataset)):
             p, st = dataset[i]
@@ -105,7 +105,7 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint", type=str, default="model/checkpoint.ckpt", help="Path to the model checkpoint.")
     parser.add_argument("--config", type=str, default="config/config.yaml", help="Path to the configuration file.")
     parser.add_argument("--num-samples", type=int, default=100, help="Number of samples to evaluate.")
-    parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducibility.")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility.")
     parser.add_argument("--num-workers", type=int, default=1, help="Number of parallel workers for evaluation.")
     parser.add_argument("--vhacd", action="store_true", help="Use VHACD dataset.")
 

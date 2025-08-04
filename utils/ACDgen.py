@@ -5,8 +5,8 @@ import numpy as np
 import lib_neural_acd
 import random
 import trimesh
+from scipy.spatial import KDTree, cKDTree
 
-from utils.misc import get_point_cloud
 
 class ACDgen(IterableDataset):
     def __init__(self, config, output_meshes=False):
@@ -15,43 +15,38 @@ class ACDgen(IterableDataset):
         self.output_meshes = output_meshes
     
 
-    def get_distances(self, pcd_points,cut_points):
+    def get_distances(self,pcd_points, cut_points):
         if len(cut_points) == 0:
             return np.ones(len(pcd_points), dtype=np.float32)
-        # Create a KD-tree from x
-        cut_pcd = o3d.geometry.PointCloud()
-        cut_pcd.points = o3d.utility.Vector3dVector(cut_points)
-        kdtree = o3d.geometry.KDTreeFlann(cut_pcd)
-
-        distances = []
-
-        for p in pcd_points:
-            _, idx, dist2 = kdtree.search_knn_vector_3d(p, 1)
-            distances.append(np.sqrt(dist2[0]))
-
-        distances = np.array(distances)
         
-        return distances
+        tree = cKDTree(cut_points)
+        dists, _ = tree.query(pcd_points, k=1)  
+
+        return dists.astype(np.float32)
     
-    def apply_gaussian_filter(self, pcd, sigma=0.02, radius = 0.05):
-        kdtree = o3d.geometry.KDTreeFlann(pcd)
-        points = np.asarray(pcd.points)
-        smoothed_points = np.zeros_like(points)
+    def apply_gaussian_filter(self, pcd, structure, sigma=0.02, radius = 0.05):
+        points = np.vstack([pcd,np.asarray(structure.vertices)])
 
-        for i in range(len(points)):
-            [_, idxs, _] = kdtree.search_radius_vector_3d(pcd.points[i], radius)
-            neighbors = points[idxs]
-            distances = np.linalg.norm(neighbors - points[i], axis=1)
-            weights = np.exp(-distances**2 / (2 * sigma**2))
-            weights /= np.sum(weights)
-            smoothed_points[i] = np.sum(neighbors * weights[:, np.newaxis], axis=0)
+        kdtree = KDTree(points)
 
-        pcd.points = o3d.utility.Vector3dVector(smoothed_points)
+        filtered_points = []
+        for point in points:
+            indices = kdtree.query_ball_point(point, radius)
+            if len(indices) > 0:
+                neighbors = points[indices]
+                weights = np.exp(-np.linalg.norm(neighbors - point, axis=1) ** 2 / (2 * sigma ** 2))
+                filtered_point = np.sum(weights[:, np.newaxis] * neighbors, axis=0) / np.sum(weights)
+                filtered_points.append(filtered_point)
+            else:
+                filtered_points.append(point)
+        
+        structure.vertices = lib_neural_acd.VecArray3d(filtered_points[-len(structure.vertices):])
+        return np.asarray(filtered_points[:len(pcd)])
 
-    def apply_random_scale(self, pcd, structure):
-        scale_x = np.random.uniform(0.5, 4.0)
-        scale_y = np.random.uniform(0.5, 4.0)
-        scale_z = np.random.uniform(0.5, 4.0)
+    def apply_random_scale(self, points, structure):
+        scale_x = np.random.uniform(1, 3.0)
+        scale_y = np.random.uniform(1, 3.0)
+        scale_z = np.random.uniform(1, 3.0)
 
         stretch_matrix = np.array([
             [scale_x, 0, 0],
@@ -59,14 +54,14 @@ class ACDgen(IterableDataset):
             [0, 0, scale_z]
         ])
 
-        points = np.asarray(pcd.points)
         points = points @ stretch_matrix.T
 
-        pcd.points = o3d.utility.Vector3dVector(points)
 
-        structure.vertices = structure.vertices @ stretch_matrix.T
+        structure.vertices = lib_neural_acd.VecArray3d(np.asarray(structure.vertices) @ stretch_matrix.T)
     
-    def apply_random_rotation(self, pcd, structure):
+        return points
+
+    def apply_random_rotation(self, points, structure):
         angle = np.random.uniform(0, 2 * np.pi)
         rotation_matrix = np.array([
             [np.cos(angle), -np.sin(angle), 0],
@@ -74,19 +69,21 @@ class ACDgen(IterableDataset):
             [0, 0, 1]
         ])
 
-        points = np.asarray(pcd.points)
         points = points @ rotation_matrix.T
 
-        pcd.points = o3d.utility.Vector3dVector(points)
-
-        structure.vertices = structure.vertices @ rotation_matrix.T
+        structure.vertices = lib_neural_acd.VecArray3d(np.asarray(structure.vertices) @ rotation_matrix.T)
+        return points
 
     def normalize_mesh(self, points, structure):
         min_vals = points.min(axis=0)
-        max_vals = points.max(axis=0)
-        points = (points - min_vals) / (max_vals - min_vals)
-        structure.vertices = lib_neural_acd.VecArray3d((np.asarray(structure.vertices) - min_vals) / (max_vals - min_vals))
-        return points
+        centered = points - min_vals
+        scale = np.max(centered.max(axis=0))  # max range across all axes
+        points_normalized = centered / scale
+
+        struct_vertices = (np.asarray(structure.vertices) - min_vals) / scale
+        structure.vertices = lib_neural_acd.VecArray3d(struct_vertices)
+
+        return points_normalized
             
     def __iter__(self):
         num_spheres = np.random.randint(self.config.generation.min_parts, self.config.generation.max_parts + 1)
@@ -100,35 +97,58 @@ class ACDgen(IterableDataset):
 
             
             #print(verts)
-            if self.output_meshes:
-                lib_neural_acd.preprocess(structure, 50.0, 0.001)
-            pcd = get_point_cloud(structure, num_points=10000)
-            distances = self.get_distances(np.asarray(pcd.points), structure.cut_verts)
+            # if self.output_meshes:
+            lib_neural_acd.preprocess(structure, 100.0, 0.001)
+                
 
-            if self.config.generation.random_scale:
-                self.apply_random_scale(pcd, structure)
+
+            points = lib_neural_acd.VecArray3d()
+            point_tris = lib_neural_acd.VecInt()
+            structure.extract_point_set(points, point_tris, self.config.general.num_points)
+
+            points = np.asarray(points)
+
+            # print(points.shape, len(structure.triangles), len(structure.vertices))
+
+            distances = self.get_distances(points, structure.cut_verts)
+
+            if self.config.generation.random_scale and structure_type == 'sphere':
+                points = self.apply_random_scale(points, structure)
             if self.config.generation.random_rotation:
-                self.apply_random_rotation(pcd,structure)
+                points = self.apply_random_rotation(points,structure)
             if self.config.generation.gaussian_filter:
-                self.apply_gaussian_filter(pcd,sigma=0.1,radius=random.uniform(0.01, 0.15))
+                radius = np.random.uniform(0.0, 0.05) if structure_type == 'cuboid' else np.random.uniform(0.0, 0.1)
+                points = self.apply_gaussian_filter(points, structure,sigma=0.1,radius=radius)
             
-            points = np.asarray(pcd.points)
-
             
             if self.config.generation.normalize_mesh:
                 points = self.normalize_mesh(points,structure)
 
+            
+
             mesh = trimesh.Trimesh(vertices=structure.vertices, faces=structure.triangles)
+
             curvature = trimesh.curvature.discrete_gaussian_curvature_measure(mesh, points, 0.02)
 
+            normals = mesh.face_normals[np.asarray(point_tris)]
 
+            # pcd = trimesh.PointCloud(points)
+            # #color normals
+            # colors = np.zeros((len(points), 3))
+            # colors[:, 0] = (normals[:, 0] + 1) / 2
+            # colors[:, 1] = (normals[:, 1] + 1) / 2
+            # colors[:, 2] = (normals[:, 2] + 1) / 2
+            # pcd.colors = o3d.utility.Vector3dVector(colors)
+            # pcd.show()
 
             #add curvature channel
-            points = np.hstack((points, curvature[:, np.newaxis]))
+            points = np.hstack((points, curvature[:, np.newaxis], normals))
+
+
 
             points = torch.tensor(points, dtype=torch.float32)
             distances = torch.tensor(distances, dtype=torch.float32)
-            distances = 1 - (torch.clamp(distances, 0.01, 0.05)-0.01)*25
+            distances = 1 - (torch.clamp(distances, 0.01, 0.03)-0.01)*50
             # distances[distances != 0] = 1
 
             if self.output_meshes:

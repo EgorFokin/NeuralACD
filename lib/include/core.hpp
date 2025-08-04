@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <iostream>
 #include <random>
 #include <stdexcept>
 #include <vector>
@@ -45,7 +46,13 @@ public:
   void extract_point_set(std::vector<Vec3D> &samples,
                          std::vector<int> &sample_tri_ids, size_t resolution,
                          double base = 0.0, bool flag = false,
-                         Plane plane = Plane());
+                         Plane plane = Plane(), bool one_per_tri = true);
+
+  void extract_point_set(std::vector<Vec3D> &samples,
+                         std::vector<int> &sample_tri_ids, size_t resolution) {
+    extract_point_set(samples, sample_tri_ids, resolution, 0.0, false, Plane(),
+                      false);
+  };
   void normalize();
   void normalize(std::vector<Vec3D> &points);
   void clear();
@@ -131,6 +138,7 @@ inline double dot(Vec3D v, Vec3D w) {
 
 inline Vec3D calc_face_normal(Vec3D p1, Vec3D p2, Vec3D p3) {
   Vec3D v, w, n, normal;
+  v[0] = p2[0] - p1[0];
   v[1] = p2[1] - p1[1];
   v[2] = p2[2] - p1[2];
   w[0] = p3[0] - p1[0];

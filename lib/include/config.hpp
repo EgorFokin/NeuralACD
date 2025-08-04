@@ -22,6 +22,8 @@ public:
   double jlinkage_threshold;
   int jlinkage_outlier_threshold;
 
+  int refinement_iterations;
+
   bool process_output_parts;
 
   Config() {
@@ -44,6 +46,8 @@ public:
     jlinkage_num_samples = 10000;
     jlinkage_threshold = 0.1;
     jlinkage_outlier_threshold = 10;
+
+    refinement_iterations = 10;
 
     process_output_parts = false;
   }

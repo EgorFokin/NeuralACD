@@ -87,14 +87,32 @@ void Cuboid::update_side(std::string dir, int dim, double value) {
     max[dim] = value;
 }
 
-bool check_aabb_collision(Cuboid &part1, Cuboid &part2, double eps) {
-  // Check if the AABBs of part1 and part2 overlap
-  return (part1.min[0] <= part2.max[0] - eps &&
-          part1.max[0] >= part2.min[0] + eps &&
-          part1.min[1] <= part2.max[1] - eps &&
-          part1.max[1] >= part2.min[1] + eps &&
-          part1.min[2] <= part2.max[2] - eps &&
-          part1.max[2] >= part2.min[2] + eps);
+bool Cuboid::is_similar(const std::vector<Cuboid> &parts, double threshold) {
+  for (const auto &p : parts) {
+    if (!check_aabb_collision(p, *this, -threshold)) {
+      continue; // not intersecting
+    }
+    for (int dim = 0; dim < 3; ++dim) {
+      if (std::abs(p.min[dim] - min[dim]) < threshold ||
+          std::abs(p.max[dim] - max[dim]) < threshold ||
+          std::abs(p.min[dim] - max[dim]) < threshold ||
+          std::abs(p.max[dim] - min[dim]) < threshold) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool Cuboid::does_intersect(const std::vector<Cuboid> &parts,
+                            double threshold) {
+  for (const auto &p : parts) {
+    if (check_aabb_collision(p, *this, threshold)) {
+
+      return true;
+    }
+  }
+  return false;
 }
 
 bool check_aabb_collision(Cuboid &part, const Vec3D &vert, double eps) {
@@ -107,8 +125,7 @@ bool check_aabb_collision(Cuboid &part, const Vec3D &vert, double eps) {
 // precondition: part collides with this cuboid
 void Cuboid::compute_cut_quads(Cuboid &part, double eps) {
   Vec3D v1, v2, v3, v4;
-  bool d1_mn_tch = 0, d2_mn_tch = 0, d1_mx_tch = 0,
-       d2_mx_tch = 0; // side touches
+  bool skip_d1_mn = 0, skip_d2_mn = 0, skip_d1_mx = 0, skip_d2_mx = 0;
   bool found = false;
 
   for (int dim = 0; dim < 3; ++dim) {
@@ -136,17 +153,18 @@ void Cuboid::compute_cut_quads(Cuboid &part, double eps) {
         continue;
       }
 
+      // check if the touch by side
       if (std::abs(part.min[d1] - min[d1]) < eps) {
-        d1_mn_tch = true;
+        skip_d1_mn = true;
       }
       if (std::abs(part.max[d1] - max[d1]) < eps) {
-        d1_mx_tch = true;
+        skip_d1_mx = true;
       }
       if (std::abs(part.min[d2] - min[d2]) < eps) {
-        d2_mn_tch = true;
+        skip_d2_mn = true;
       }
       if (std::abs(part.max[d2] - max[d2]) < eps) {
-        d2_mx_tch = true;
+        skip_d2_mx = true;
       }
 
       Vec3D base = {0.0, 0.0, 0.0};
@@ -179,13 +197,13 @@ void Cuboid::compute_cut_quads(Cuboid &part, double eps) {
   cut_quads.push_back(quad);
 
   std::vector<Vec3D> new_vertices;
-  if (!d2_mn_tch)
+  if (!skip_d2_mn)
     subdivide_edge(v1, v2, new_vertices, 4);
-  if (!d1_mx_tch)
+  if (!skip_d1_mx)
     subdivide_edge(v2, v3, new_vertices, 4);
-  if (!d2_mx_tch)
+  if (!skip_d2_mx)
     subdivide_edge(v3, v4, new_vertices, 4);
-  if (!d1_mn_tch)
+  if (!skip_d1_mn)
     subdivide_edge(v4, v1, new_vertices, 4);
 
   for (const auto &new_vertex : new_vertices) {
@@ -323,6 +341,10 @@ void Cuboid::cut_face(std::string dir, int dim,
   std::vector<std::array<double, 2>> points;
   std::vector<std::pair<int, int>> edges;
 
+  Vec3D face_normal = calc_face_normal(vertices[triangles[tris_i[0]][0]],
+                                       vertices[triangles[tris_i[0]][1]],
+                                       vertices[triangles[tris_i[0]][2]]);
+
   // add outer border
   points.push_back({v1[d1], v1[d2]});
   points.push_back({v2[d1], v2[d2]});
@@ -410,7 +432,14 @@ void Cuboid::cut_face(std::string dir, int dim,
     i2 = remap_index(i2);
     i3 = remap_index(i3);
 
-    new_tris.push_back({i1, i2, i3});
+    Vec3D tri_normal =
+        calc_face_normal(vertices[i1], vertices[i2], vertices[i3]);
+
+    if (dot(tri_normal, face_normal) < 1e-6) { // fix normals
+      new_tris.push_back({i1, i3, i2});
+    } else {
+      new_tris.push_back({i1, i2, i3});
+    }
   }
 
   // replace old triangles. Not deleting to not break get_side_quad

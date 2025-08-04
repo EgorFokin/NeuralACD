@@ -18,7 +18,7 @@ from torch.utils.data import Subset
 from utils.ACDgen import ACDgen
 import argparse
 
-from utils.misc import load_config
+from utils.misc import load_config, set_seed
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import CSVLogger
@@ -39,7 +39,7 @@ if __name__ == "__main__":
     train_loader = DataLoader(dataset, batch_size=config.model.batch_size, num_workers=config.model.num_workers)
 
 
-    pl.seed_everything(42)
+    set_seed(0)
     
     torch.set_float32_matmul_precision('high')
 
@@ -56,6 +56,7 @@ if __name__ == "__main__":
             dirpath=f'checkpoints/{str(datetime.now().strftime("%d,%m,%Y-%H:%M:%S"))}/',
             filename='best-model-{ema_loss}',
             save_top_k=3,
+            save_last=True,
             mode='min',
             every_n_train_steps=1),
             ]

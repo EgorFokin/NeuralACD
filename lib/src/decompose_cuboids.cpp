@@ -227,13 +227,12 @@ Cuboid *get_colliding_part(std::vector<Cuboid> &parts, Cuboid &new_part) {
   return colliding_part; // No collision detected
 }
 
-void remove_flat(std::vector<Cuboid> &parts, double eps = 1e-6) {
-  // Remove parts that are flat (zero volume)
+void remove_flat(std::vector<Cuboid> &parts, double threshold = 0.05) {
   parts.erase(std::remove_if(parts.begin(), parts.end(),
-                             [eps](const Cuboid &part) {
-                               return (part.max[0] - part.min[0] < 2 * eps ||
-                                       part.max[1] - part.min[1] < 2 * eps ||
-                                       part.max[2] - part.min[2] < 2 * eps);
+                             [threshold](const Cuboid &part) {
+                               return (part.max[0] - part.min[0] < threshold ||
+                                       part.max[1] - part.min[1] < threshold ||
+                                       part.max[2] - part.min[2] < threshold);
                              }),
               parts.end());
 }

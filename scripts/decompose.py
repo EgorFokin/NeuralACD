@@ -26,9 +26,9 @@ def show_geometry(meshes, save_path=None):
 
 def decompose(mesh, cut_points, stats_file=""):
     cut_points = cut_points[:, :3]  # Ensure cut points are 3D
-    #limit to 1000
-    if cut_points.shape[0] > 1000:
-        cut_points = cut_points[:1000]
+    #limit to 1500
+    if cut_points.shape[0] > 1500:
+        cut_points = cut_points[:1500]
     cut_points_vector = lib_neural_acd.VecArray3d(cut_points.tolist())
     # lib_neural_acd.config.process_output_parts = True
     result = lib_neural_acd.process(mesh, cut_points_vector,stats_file)
@@ -49,17 +49,22 @@ if __name__ == "__main__":
     
     if args.path:
         structure = trimesh.load(args.path, force='mesh')
-        structure.show()
+        # structure.show()
         structure = get_lib_mesh(structure)
-        structure = normalize_mesh(structure)
-        lib_neural_acd.preprocess(structure, 50.0, 0.05)
+        normalize_mesh(structure)
+        lib_neural_acd.preprocess(structure, 50.0, 0.55)
 
-        pcd = get_point_cloud(structure)
-        points = np.asarray(pcd.points)
+        points = lib_neural_acd.VecArray3d()
+        point_tris = lib_neural_acd.VecInt()
+        structure.extract_point_set(points, point_tris, config.general.num_points)
+
+        points = np.asarray(points)
+
 
         tmesh = trimesh.Trimesh(vertices=np.asarray(structure.vertices), faces=np.asarray(structure.triangles))
         curvature = trimesh.curvature.discrete_gaussian_curvature_measure(tmesh, points, radius=0.02)
-        points = np.hstack((points, curvature[:, np.newaxis]))
+        normals = tmesh.face_normals[np.asarray(point_tris)]
+        points = np.hstack((points, curvature[:, np.newaxis],normals))
 
     else:
         it = ACDgen(config,output_meshes=True).__iter__()

@@ -23,17 +23,18 @@ class ACDModel(pl.LightningModule):
         
     def _build_model(self):
         self.SA_modules = nn.ModuleList()
-        c_in = 1
+        channels = 3 + 1 #normal + curvature
+        c_in = channels
         self.SA_modules.append(
             PointnetSAModuleMSG(
                 npoint=10000,
-                radii=[0.03, 0.04, 0.05],
-                nsamples=[8 ,16, 32],
-                mlps=[[c_in, 8, 8, 16], [c_in, 16, 16, 32], [c_in, 32, 32, 64]],
+                radii=[0.03, 0.05],
+                nsamples=[16, 32],
+                mlps=[[c_in, 16, 16, 32], [c_in, 64, 64, 128]], # 32 32 64 for the first one doesnt work
                 use_xyz=self.hparams.use_xyz,
             )
         )
-        c_out_0 = 16 + 32 + 64
+        c_out_0 = 32 + 128
 
         c_in = c_out_0
         self.SA_modules.append(
@@ -47,17 +48,19 @@ class ACDModel(pl.LightningModule):
         )
         c_out_1 = 128 + 128
 
-        c_in = c_out_1
-        self.SA_modules.append(
-            PointnetSAModuleMSG(
-                npoint=512,
-                radii=[0.3, 0.4],
-                nsamples=[16, 32],
-                mlps=[[c_in, 128, 196, 256], [c_in, 128, 196, 256]],
-                use_xyz=self.hparams.use_xyz,
-            )
-        )
-        c_out_2 = 256 + 256
+        # following layers didn't affect the results
+
+        # c_in = c_out_1
+        # self.SA_modules.append(
+        #     PointnetSAModuleMSG(
+        #         npoint=512,
+        #         radii=[0.3, 0.4],
+        #         nsamples=[16, 32],
+        #         mlps=[[c_in, 128, 196, 256], [c_in, 128, 196, 256]],
+        #         use_xyz=self.hparams.use_xyz,
+        #     )
+        # )
+        # c_out_2 = 256 + 256
 
         # c_in = c_out_2
         # self.SA_modules.append(
@@ -75,16 +78,15 @@ class ACDModel(pl.LightningModule):
 
 
         self.FP_modules = nn.ModuleList()
-        self.FP_modules.append(PointnetFPModule(mlp=[256 + 1, 128, 128]))
-        self.FP_modules.append(PointnetFPModule(mlp=[512 + c_out_0, 256, 256]))
-        self.FP_modules.append(PointnetFPModule(mlp=[512 + c_out_1, 512, 512]))
+        self.FP_modules.append(PointnetFPModule(mlp=[256 + channels, 128, 128]))
+        self.FP_modules.append(PointnetFPModule(mlp=[c_out_1 + c_out_0, 256, 256]))
+        # self.FP_modules.append(PointnetFPModule(mlp=[c_out_2 + c_out_1, 512, 512]))
         # self.FP_modules.append(PointnetFPModule(mlp=[c_out_3 + c_out_2, 512, 512]))
 
         self.fc_layer = nn.Sequential(
             nn.Conv1d(128, 128, kernel_size=1, bias=False),
             nn.BatchNorm1d(128),
             nn.ReLU(True),
-            nn.Dropout(0.5),
             nn.Conv1d(128, 1, kernel_size=1),
         )
 

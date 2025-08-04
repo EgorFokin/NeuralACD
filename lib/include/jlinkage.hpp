@@ -1,4 +1,5 @@
 #pragma once
+#include <bitset>
 #include <core.hpp>
 #include <utility>
 #include <vector>
@@ -7,10 +8,7 @@ using namespace std;
 
 namespace neural_acd {
 
-namespace detail {
-using BoolVec = vector<bool>;
-using BoolMat = vector<BoolVec>;
-} // namespace detail
+constexpr int SAMPLE_LIMIT = 20000; // Maximum number of points
 
 class JLinkage {
 public:
@@ -27,11 +25,12 @@ private:
   int outlier_threshold;
   vector<Vec3D> points;
   vector<vector<double>> sample_probs;
-  detail::BoolMat preference_set;
+  vector<bitset<SAMPLE_LIMIT>> preference_set;
   void calculate_distances();
   void sample_triplet(int &i1, int &i2, int &i3);
   void calculate_preference_sets();
-  double jaccard_distance(const detail::BoolVec &a, const detail::BoolVec &b);
+  double jaccard_distance(const bitset<SAMPLE_LIMIT> &a,
+                          const bitset<SAMPLE_LIMIT> &b);
   vector<Plane> cluster_planes(vector<vector<int>> &clusters);
 };
 

@@ -56,10 +56,8 @@ void print_cost_mtx(const vector<double> &costMatrix) {
   cout << endl;
 }
 
-double multimerge_ch(Mesh &m, MeshList &meshs, MeshList &cvxs,
-                     double threshold) {
+void multimerge_ch(Mesh &m, MeshList &meshs, MeshList &cvxs, double threshold) {
   size_t nConvexHulls = (size_t)cvxs.size();
-  double h = 0;
 
   if (nConvexHulls > 1) {
     int bound = ((((nConvexHulls - 1) * nConvexHulls)) >> 1);
@@ -104,7 +102,6 @@ double multimerge_ch(Mesh &m, MeshList &meshs, MeshList &cvxs,
       if (bestCost > threshold)
         break;
 
-      h = max(h, bestCost);
       const size_t addrI =
           (static_cast<int32_t>(sqrt(1 + (8 * addr))) - 1) >> 1;
       const size_t p1 = addrI + 1;
@@ -168,8 +165,6 @@ double multimerge_ch(Mesh &m, MeshList &meshs, MeshList &cvxs,
       costMatrix.resize(erase_idx);
     }
   }
-
-  return h;
 }
 
 MeshList separate_disjoint_step(Mesh &part) {
@@ -261,13 +256,74 @@ void separate_disjoint(MeshList &parts) {
   for (auto &part : parts) {
     MeshList res = separate_disjoint_step(part);
     for (auto &new_part : res) {
-      if (new_part.triangles.size() < 3)
+      if (std::abs(get_mesh_volume(new_part)) < 1e-6)
         continue; // skip degenerate parts
       new_parts.push_back(new_part);
     }
   }
   parts.clear();
   parts.insert(parts.end(), new_parts.begin(), new_parts.end());
+}
+
+MeshList decompose(Mesh &mesh, vector<Plane> &planes) {
+  MeshList parts;
+  if (planes.empty()) {
+    parts.push_back(mesh);
+  } else {
+    parts = multiclip(mesh, planes);
+  }
+  separate_disjoint(parts);
+  return parts;
+}
+
+MeshList get_cvxs(MeshList &parts) {
+  MeshList cvxs;
+  for (auto &part : parts) {
+    Mesh ch;
+    part.compute_ch(ch);
+    cvxs.push_back(ch);
+  }
+
+  return cvxs;
+}
+
+double compute_final_concavity(Mesh &mesh, MeshList &cvxs) {
+  Mesh hull;
+  int vertex_offset = 0;
+  for (auto &cvx : cvxs) {
+    hull.vertices.insert(hull.vertices.end(), cvx.vertices.begin(),
+                         cvx.vertices.end());
+    for (auto &tri : cvx.triangles) {
+      hull.triangles.push_back({tri[0] + vertex_offset, tri[1] + vertex_offset,
+                                tri[2] + vertex_offset});
+    }
+    vertex_offset += cvx.vertices.size();
+  }
+  manifold_preprocess(hull, config.remesh_res, config.remesh_threshold);
+
+  double h = compute_h(mesh, hull, config.cost_rv_k, config.pcd_res);
+
+  return h;
+}
+
+vector<Plane> move_planes(vector<Plane> &planes) {
+
+  vector<Plane> new_planes;
+
+  uniform_real_distribution<double> dist(-0.05, 0.05);
+
+  for (auto &plane : planes) {
+    double norm =
+        sqrt(plane.a * plane.a + plane.b * plane.b + plane.c * plane.c);
+
+    double new_d = plane.d + dist(random_engine) * norm;
+
+    // cout << "Moving plane from d=" << plane.d << " to new_d=" << new_d <<
+    // endl;
+
+    new_planes.push_back(Plane(plane.a, plane.b, plane.c, new_d));
+  }
+  return new_planes;
 }
 
 void write_stats(std::string stats_file, double concavity, int n_parts) {
@@ -284,50 +340,55 @@ MeshList process(Mesh mesh, vector<Vec3D> cut_points, std::string stats_file) {
   mesh.normalize(cut_points); // normalize the mesh and cut points
 
   MeshList parts;
-  if (cut_points.size() != 0) {
+  vector<Plane> planes;
+  if (cut_points.size() >= 3) {
 
     JLinkage jlinkage(config.jlinkage_sigma, config.jlinkage_num_samples,
                       config.jlinkage_threshold,
                       config.jlinkage_outlier_threshold);
     jlinkage.set_points(cut_points);
-    vector<Plane> planes = jlinkage.get_best_planes();
-
-    if (planes.empty()) {
-      parts.push_back(mesh);
-    } else {
-      parts = multiclip(mesh, planes);
-    }
-
-  } else {
-    parts.push_back(mesh);
+    planes = jlinkage.get_best_planes();
   }
-  separate_disjoint(parts);
+  double h;
   MeshList cvxs;
-  for (auto &part : parts) {
-    Mesh ch;
-    part.compute_ch(ch);
-    cvxs.push_back(ch);
-    double h = compute_h(part, ch, config.cost_rv_k, config.pcd_res);
-    // cout << h << endl;
-  }
+  if (planes.empty()) {
+    // If no planes found, use the original mesh as a single part
+    parts.push_back(mesh);
+    cvxs = get_cvxs(parts);
+    h = compute_final_concavity(mesh, cvxs);
+  } else {
+    // Decompose the mesh using the identified planes
+    parts = decompose(mesh, planes);
+    cvxs = get_cvxs(parts);
+    multimerge_ch(mesh, parts, cvxs, config.merge_threshold);
 
-  // std::cout << "Merge threshold: " << config.merge_threshold << std::endl;
-  multimerge_ch(mesh, parts, cvxs, config.merge_threshold);
+    h = compute_final_concavity(mesh, cvxs);
+    // cout << "Initial concavity: " << h << endl;
 
-  Mesh hull;
-  int vertex_offset = 0;
-  for (auto &cvx : cvxs) {
-    hull.vertices.insert(hull.vertices.end(), cvx.vertices.begin(),
-                         cvx.vertices.end());
-    for (auto &tri : cvx.triangles) {
-      hull.triangles.push_back({tri[0] + vertex_offset, tri[1] + vertex_offset,
-                                tri[2] + vertex_offset});
+    // refinement
+    for (int i = 0; i < config.refinement_iterations; ++i) {
+      vector<Plane> new_planes = move_planes(planes);
+      MeshList new_parts = decompose(mesh, new_planes);
+      MeshList new_cvxs = get_cvxs(new_parts);
+      multimerge_ch(mesh, new_parts, new_cvxs, config.merge_threshold);
+      double cur_h = compute_final_concavity(mesh, new_cvxs);
+      // cout << "Iteration " << i + 1 << ": concavity = " << cur_h << endl;
+      if (cur_h < h) {
+        h = cur_h;
+        parts = new_parts;
+        cvxs = new_cvxs;
+      }
     }
-    vertex_offset += cvx.vertices.size();
   }
-  manifold_preprocess(hull, config.remesh_res, config.remesh_threshold);
 
-  double h = compute_h(mesh, hull, config.cost_rv_k, config.pcd_res);
+  if (parts.empty()) {
+    cout << "Final concavity: " << 0 << endl;
+    cout << "Number of parts: " << 0 << endl;
+
+    if (!stats_file.empty())
+      write_stats(stats_file, 0, 0);
+  }
+
   cout << "Final concavity: " << h << endl;
   cout << "Number of parts: " << cvxs.size() << endl;
 

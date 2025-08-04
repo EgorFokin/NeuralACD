@@ -78,4 +78,14 @@ void Icosphere::filter_cut_verts(std::vector<Icosphere> &parts, double eps) {
     }
   }
 }
+
+bool Icosphere::does_intersect(const std::vector<Icosphere> &parts,
+                               double threshold) const {
+  for (const auto &part : parts) {
+    if (vector_length(part.pos - pos) < part.r + r + threshold) {
+      return true;
+    }
+  }
+  return false;
+}
 } // namespace neural_acd

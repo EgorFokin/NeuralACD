@@ -1,5 +1,6 @@
 #include <Eigen/Dense>
 #include <algorithm>
+#include <bitset>
 #include <cmath>
 #include <core.hpp>
 #include <fstream>
@@ -7,6 +8,7 @@
 #include <jlinkage.hpp>
 #include <limits>
 #include <random>
+#include <stdexcept>
 
 using namespace std;
 
@@ -14,7 +16,11 @@ namespace neural_acd {
 JLinkage::JLinkage(double sigma_, int num_samples_, double threshold_,
                    int outlier_threshold_)
     : sigma(sigma_), num_samples(num_samples_), threshold(threshold_),
-      outlier_threshold(outlier_threshold_) {}
+      outlier_threshold(outlier_threshold_) {
+  if (num_samples > SAMPLE_LIMIT) {
+    throw std::invalid_argument("Jlinkage: num_samples is too large");
+  }
+}
 
 void JLinkage::set_points(const vector<Vec3D> &pts) {
   points = pts;
@@ -70,7 +76,7 @@ void JLinkage::sample_triplet(int &i1, int &i2, int &i3) {
 
 void JLinkage::calculate_preference_sets() {
   int N = points.size();
-  preference_set = detail::BoolMat(N, detail::BoolVec(num_samples, false));
+  preference_set = vector<bitset<SAMPLE_LIMIT>>(N);
 
   for (int i = 0; i < num_samples; ++i) {
     int i1, i2, i3;
@@ -96,16 +102,11 @@ void JLinkage::calculate_preference_sets() {
   }
 }
 
-double JLinkage::jaccard_distance(const detail::BoolVec &a,
-                                  const detail::BoolVec &b) {
-  int intersection = 0, union_count = 0;
-  for (size_t i = 0; i < a.size(); ++i) {
-    if (a[i] || b[i])
-      union_count++;
-    if (a[i] && b[i])
-      intersection++;
-  }
-  return 1.0 - (double)intersection / (union_count + 1e-8);
+double JLinkage::jaccard_distance(const std::bitset<SAMPLE_LIMIT> &a,
+                                  const std::bitset<SAMPLE_LIMIT> &b) {
+  auto intersection = (a & b).count();
+  auto union_count = (a | b).count();
+  return 1.0 - static_cast<double>(intersection) / (union_count + 1e-8);
 }
 
 void print_dist_matrix(const vector<double> &dist_matrix, int N) {
@@ -120,7 +121,7 @@ void print_dist_matrix(const vector<double> &dist_matrix, int N) {
 }
 
 vector<Plane> JLinkage::get_best_planes() {
-  int N = preference_set.size();
+  int N = points.size();
   // N = 5;
   vector<double> dist_matrix(N * (N - 1) >> 1, 0.0);
 

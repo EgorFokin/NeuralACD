@@ -1,32 +1,47 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import os
+import time
 
-import os 
 os.environ["QT_QPA_PLATFORM"] = "xcb"
+plt.ion()  # Turn on interactive mode
 
-versions = os.listdir("logs/lightning_logs")
-versions = [int(v.split('_')[1]) for v in versions]
+fig, ax = plt.subplots()
+line1, = ax.plot([], [], label="Train Loss")
+line2, = ax.plot([], [], label="EMA Loss")
+ax.set_title("Training Loss")
+ax.set_xlabel("Step")
+ax.set_ylabel("Loss")
+ax.grid(True)
+ax.legend()
 
-max_version = max(versions)
+while True:
+    versions = os.listdir("logs/lightning_logs")
+    versions = [int(v.split('_')[1]) for v in versions if v.startswith("version_")]
+    if not versions:
+        continue
+    max_version = max(versions)
 
-# Load the logged metrics
-metrics = pd.read_csv(f"logs/lightning_logs/version_{max_version}/metrics.csv")
+    try:
+        metrics = pd.read_csv(f"logs/lightning_logs/version_{max_version}/metrics.csv")
+    except Exception as e:
+        time.sleep(1)
+        continue  # File might be locked or incomplete
 
-# Filter and plot
-train_loss = metrics[metrics["train_loss"].notna()]
-ema_loss = metrics[metrics["ema_loss"].notna()]
-# val_loss = metrics[metrics["val_loss"].notna()]
+    train_loss = metrics[metrics["train_loss"].notna()]
+    ema_loss = metrics[metrics["ema_loss"].notna()]
 
-# print("Min validation loss:",min(val_loss["val_loss"]))
+    if len(train_loss) == 0:
+        continue
 
-# plt.ylim(0,2)
+    line1.set_xdata(train_loss["step"])
+    line1.set_ydata(train_loss["train_loss"])
+    line2.set_xdata(ema_loss["step"])
+    line2.set_ydata(ema_loss["ema_loss"])
 
-plt.plot(train_loss["train_loss"], label="Train Loss")
-plt.plot(ema_loss["ema_loss"], label="EMA Loss")
-# plt.plot(val_loss["epoch"], val_loss["val_loss"], label="Val Loss")
-# plt.xlabel("step")
-# plt.ylabel("Loss")
-plt.legend()
-plt.title("Training Loss")
-plt.grid(True)
-plt.show()
+    ax.relim()
+    ax.autoscale_view()
+    fig.canvas.draw()
+    fig.canvas.flush_events()
+
+    time.sleep(1)  # Refresh every second

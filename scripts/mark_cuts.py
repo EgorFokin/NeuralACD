@@ -92,16 +92,29 @@ def mark_cuts(points, checkpoint, config, no_threshold=False):
             distances.append(pred)
         distances = torch.cat(distances, dim=0)
 
-        if not batched:
-            distances = distances.squeeze(0)
+        
 
         distances = distances.cpu().numpy()
 
     if no_threshold:
+        if not batched:
+            distances = distances.squeeze(0)
         return distances
 
-    distances[distances < config.general.cut_point_threshold] = 0
-    distances[distances >= config.general.cut_point_threshold] = 1
+    for i in range(len(distances)):
+        distances[i][distances[i] < config.general.cut_point_threshold] = 0
+
+        if len(np.flatnonzero(distances[i])) > config.general.cut_point_limit:
+            # Keep only the top cut points based on distances
+            top_indices = np.argpartition(distances[i], -config.general.cut_point_limit)[-config.general.cut_point_limit:]
+            distances[i][top_indices] = 1
+            distances[i][distances[i] < 1] = 0
+        else:
+            # If fewer than cut_point_limit points, set all to 1
+            distances[i][distances[i] > 0] = 1
+
+    if not batched:
+        distances = distances.squeeze(0)
 
     return distances
 
@@ -121,20 +134,29 @@ if __name__ == "__main__":
     if args.path:
         structure = trimesh.load(args.path, force='mesh')
         structure = get_lib_mesh(structure)
-        structure = normalize_mesh(structure)
+        normalize_mesh(structure)
         lib_neural_acd.preprocess(structure, 50.0, 0.05)
 
-        pcd = get_point_cloud(structure)
-        points = np.asarray(pcd.points)
+        points = lib_neural_acd.VecArray3d()
+        point_tris = lib_neural_acd.VecInt()
+        structure.extract_point_set(points, point_tris, config.general.num_points)
+
+        
+
+        points = np.asarray(points)
+
 
         tmesh = trimesh.Trimesh(vertices=np.asarray(structure.vertices), faces=np.asarray(structure.triangles))
         curvature = trimesh.curvature.discrete_gaussian_curvature_measure(tmesh, points, radius=0.02)
-        points = np.hstack((points, curvature[:, np.newaxis]))
+        normals = tmesh.face_normals[np.asarray(point_tris)]
+        points = np.hstack((points, curvature[:, np.newaxis],normals))
     else:
         it = ACDgen(config,output_meshes=False).__iter__()
         if args.seed is not None:
             set_seed(args.seed)
         points, distances_t = next(it)    
+
+        
 
 
     # print(distances_t)

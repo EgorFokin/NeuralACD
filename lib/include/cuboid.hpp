@@ -24,6 +24,16 @@ public:
   void remove_inner_part();
   void cut_face(std::string dir, int dim,
                 std::vector<std::array<Vec3D, 4>> &quads);
+  bool is_similar(const std::vector<Cuboid> &parts, double threshold);
+  bool does_intersect(const std::vector<Cuboid> &parts, double threshold);
 };
-bool check_aabb_collision(Cuboid &part1, Cuboid &part2, double eps = 1e-6);
+inline bool check_aabb_collision(const Cuboid &part1, const Cuboid &part2,
+                                 double eps = 1e-6) {
+  return (part1.min[0] <= part2.max[0] - eps &&
+          part1.max[0] >= part2.min[0] + eps &&
+          part1.min[1] <= part2.max[1] - eps &&
+          part1.max[1] >= part2.min[1] + eps &&
+          part1.min[2] <= part2.max[2] - eps &&
+          part1.max[2] >= part2.min[2] + eps);
+}
 } // namespace neural_acd

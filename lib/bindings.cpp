@@ -13,6 +13,9 @@ namespace py = pybind11;
 
 PYBIND11_MAKE_OPAQUE(std::vector<std::array<double, 3>>);
 PYBIND11_MAKE_OPAQUE(std::vector<std::array<double, 4>>);
+PYBIND11_MAKE_OPAQUE(std::vector<std::array<int, 3>>);
+PYBIND11_MAKE_OPAQUE(std::vector<double>);
+PYBIND11_MAKE_OPAQUE(std::vector<int>);
 
 PYBIND11_MODULE(lib_neural_acd, m) {
   py::bind_vector<std::vector<std::array<double, 3>>>(
@@ -22,12 +25,19 @@ PYBIND11_MODULE(lib_neural_acd, m) {
   py::bind_vector<std::vector<std::array<double, 4>>>(
       m, "VecArray4d");                                 // plane array
   py::bind_vector<std::vector<double>>(m, "VecDouble"); // cut verts
+  py::bind_vector<std::vector<int>>(m, "VecInt");       // sample triangle ids
 
   py::class_<neural_acd::Mesh>(m, "Mesh")
       .def_readwrite("vertices", &neural_acd::Mesh::vertices)
       .def_readwrite("triangles", &neural_acd::Mesh::triangles)
       .def_readwrite("cut_verts", &neural_acd::Mesh::cut_verts)
-      .def(py::init<>());
+      .def(py::init<>())
+      .def("extract_point_set",
+           static_cast<void (neural_acd::Mesh::*)(
+               std::vector<std::array<double, 3>> &, std::vector<int> &,
+               size_t)>(&neural_acd::Mesh::extract_point_set),
+           py::arg("samples"), py::arg("sample_tri_ids"),
+           py::arg("resolution") = 10000);
 
   py::bind_vector<neural_acd::MeshList>(m, "MeshList");
 
@@ -55,6 +65,8 @@ PYBIND11_MODULE(lib_neural_acd, m) {
                      &neural_acd::Config::jlinkage_threshold)
       .def_readwrite("jlinkage_outlier_threshold",
                      &neural_acd::Config::jlinkage_outlier_threshold)
+      .def_readwrite("refinement_iterations",
+                     &neural_acd::Config::refinement_iterations)
       .def_readwrite("process_output_parts",
                      &neural_acd::Config::process_output_parts);
 
