@@ -88,7 +88,7 @@ class ACDgen(IterableDataset):
     def __iter__(self):
         num_spheres = np.random.randint(self.config.generation.min_parts, self.config.generation.max_parts + 1)
         while True:
-            structure_type = np.random.choice(['sphere', 'cuboid'])
+            structure_type = 'cuboid'#np.random.choice(['sphere', 'cuboid'])
             if structure_type == 'sphere':
                 structure = lib_neural_acd.generate_sphere_structure(num_spheres)
             elif structure_type == 'cuboid':

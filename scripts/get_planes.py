@@ -24,7 +24,7 @@ def get_planes(cut_points):
     return list(planes)
 
 
-def get_trimesh_plane(a, b, c, d):
+def get_trimesh_plane(a, b, c, d, color=[255, 0, 0, 100]):
     # Normalize the normal
     normal = np.array([a, b, c], dtype=np.float64)
     normal = normal / np.linalg.norm(normal)
@@ -49,17 +49,22 @@ def get_trimesh_plane(a, b, c, d):
     plane.apply_translation(point_on_plane)
 
     # Set visual style
-    plane.visual.face_colors = [255, 0, 0, 100]  # red, semi-transparent
+    plane.visual.face_colors = color
     return plane
 
 def visualize(planes,points, distances):
 
     scene = trimesh.Scene()
-
+    i = 0
     for plane in planes:
-        trimesh_plane = get_trimesh_plane(plane[0], plane[1], plane[2], plane[3])
+        if i in [1,0]:
+            trimesh_plane = get_trimesh_plane(plane[0], plane[1], plane[2], plane[3],[255, 0, 0, 100])
+        else:
+            trimesh_plane = get_trimesh_plane(plane[0], plane[1], plane[2], plane[3],[0, 255, 0, 100])
         print(plane[0], plane[1], plane[2], plane[3])
         scene.add_geometry(trimesh_plane)
+
+        i+=1
 
     distances = np.asarray(distances, dtype=np.float32)
     points = points[:, :3]
@@ -92,12 +97,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     config = load_config(args.config)
+    if args.seed is not None:
+        set_seed(args.seed)
 
     if args.path:
         structure = trimesh.load(args.path, force='mesh')
         structure = get_lib_mesh(structure)
         normalize_mesh(structure)
-        lib_neural_acd.preprocess(structure, 50.0, 0.05)
+        lib_neural_acd.preprocess(structure, 50.0, 0.55)
 
         points = lib_neural_acd.VecArray3d()
         point_tris = lib_neural_acd.VecInt()
@@ -113,8 +120,6 @@ if __name__ == "__main__":
         points = np.hstack((points, curvature[:, np.newaxis],normals))
     else:
         it = ACDgen(config,output_meshes=True).__iter__()
-        if args.seed is not None:
-            set_seed(args.seed)
         points, distances_t, structure = next(it)    
 
 
@@ -126,6 +131,7 @@ if __name__ == "__main__":
 
     # mesh = trimesh.Trimesh(vertices=structure.vertices, faces=structure.triangles)
     # mesh.show()
+
 
     points = np.asarray(points)
     points = points[:, :3]  # Ensure points are 3D

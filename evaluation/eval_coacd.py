@@ -12,13 +12,12 @@ import argparse
 from utils.misc import *
 
 
-NUM_SAMPLES = 100
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate COACD model.")
     parser.add_argument("--vhacd", action="store_true", help="Use VHACD dataset.")
-    parser.add_argument("--num-samples", type=int, default=NUM_SAMPLES, help="Number of samples to evaluate.")
+    parser.add_argument("--num-samples", type=int, default=50, help="Number of samples to evaluate.")
     parser.add_argument("--threshold", type=float, default=0.05, help="Threshold for COACD.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility.")
     parser.add_argument("--config", type=str, default="config/config.yaml", help="Path to the configuration file.")
@@ -45,11 +44,11 @@ if __name__ == "__main__":
         set_seed(args.seed)
         #next(it)  
 
-        for i in range(NUM_SAMPLES):
+        for i in range(args.num_samples):
             points, distances_t, structure = next(it)
 
             mesh = coacd.Mesh(np.asarray(structure.vertices), np.asarray(structure.triangles))
-            result = coacd.run_coacd(mesh)
+            result = coacd.run_coacd(mesh,threshold=args.threshold)
 
     total_concavity = 0.0
     total_parts = 0
@@ -59,5 +58,5 @@ if __name__ == "__main__":
             concavity, num_parts = map(float, line.strip().split(';'))
             total_concavity += concavity
             total_parts += num_parts
-    print(f"Average Concavity: {total_concavity / NUM_SAMPLES}")
-    print(f"Average Parts: {total_parts / NUM_SAMPLES}")
+    print(f"Average Concavity: {total_concavity / args.num_samples}")
+    print(f"Average Parts: {total_parts / args.num_samples}")

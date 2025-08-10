@@ -310,7 +310,7 @@ vector<Plane> move_planes(vector<Plane> &planes) {
 
   vector<Plane> new_planes;
 
-  uniform_real_distribution<double> dist(-0.05, 0.05);
+  uniform_real_distribution<double> dist(-0.07, 0.07);
 
   for (auto &plane : planes) {
     double norm =
@@ -348,6 +348,10 @@ MeshList process(Mesh mesh, vector<Vec3D> cut_points, std::string stats_file) {
                       config.jlinkage_outlier_threshold);
     jlinkage.set_points(cut_points);
     planes = jlinkage.get_best_planes();
+    // for (auto &plane : planes) {
+    //   cout << "Plane: " << plane.a << " " << plane.b << " " << plane.c << " "
+    //        << plane.d << endl;
+    // }
   }
   double h;
   MeshList cvxs;
@@ -394,8 +398,6 @@ MeshList process(Mesh mesh, vector<Vec3D> cut_points, std::string stats_file) {
 
   if (!stats_file.empty())
     write_stats(stats_file, h, cvxs.size());
-
-  // cvxs.push_back(hull);
 
   if (config.process_output_parts)
     return parts;

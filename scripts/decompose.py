@@ -46,10 +46,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     config = load_config(args.config)
+    if args.seed is not None:
+        set_seed(args.seed)
     
     if args.path:
         structure = trimesh.load(args.path, force='mesh')
-        # structure.show()
+        structure.show()
         structure = get_lib_mesh(structure)
         normalize_mesh(structure)
         lib_neural_acd.preprocess(structure, 50.0, 0.55)
@@ -68,8 +70,6 @@ if __name__ == "__main__":
 
     else:
         it = ACDgen(config,output_meshes=True).__iter__()
-        if args.seed is not None:
-            set_seed(args.seed)
         points, distances_t, structure = next(it)    
 
         points = np.asarray(points)
@@ -78,6 +78,7 @@ if __name__ == "__main__":
         distances = distances_t
     else:
         distances = mark_cuts(points, args.checkpoint, config)
+
     
     parts = decompose(structure, points[distances == 1])
     show_geometry(parts, save_path="decomposed.glb")

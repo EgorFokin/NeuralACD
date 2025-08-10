@@ -172,7 +172,10 @@ void Mesh::clear() {
 void Mesh::normalize() {
   if (vertices.empty())
     return;
+
   Vec3D min = vertices[0], max = vertices[0];
+
+  // Compute bounding box
   for (const auto &v : vertices) {
     for (int i = 0; i < 3; i++) {
       if (v[i] < min[i])
@@ -181,18 +184,27 @@ void Mesh::normalize() {
         max[i] = v[i];
     }
   }
-  Vec3D center = {(min[0] + max[0]) / 2, (min[1] + max[1]) / 2,
-                  (min[2] + max[2]) / 2};
+
+  // Compute center of bounding box
+  Vec3D center = {(min[0] + max[0]) / 2.0, (min[1] + max[1]) / 2.0,
+                  (min[2] + max[2]) / 2.0};
+
+  // Compute longest side length
   double scale = std::max({max[0] - min[0], max[1] - min[1], max[2] - min[2]});
+
+  // Normalize: center and scale to fit in [-1, 1] along the longest axis
   for (auto &v : vertices) {
-    v = (v - center) / scale;
+    v = (v - center) * 2 / scale;
   }
 }
 
 void Mesh::normalize(std::vector<Vec3D> &points) {
   if (vertices.empty())
     return;
+
   Vec3D min = vertices[0], max = vertices[0];
+
+  // Compute bounding box
   for (const auto &v : vertices) {
     for (int i = 0; i < 3; i++) {
       if (v[i] < min[i])
@@ -201,14 +213,20 @@ void Mesh::normalize(std::vector<Vec3D> &points) {
         max[i] = v[i];
     }
   }
-  Vec3D center = {(min[0] + max[0]) / 2, (min[1] + max[1]) / 2,
-                  (min[2] + max[2]) / 2};
+
+  // Compute center of bounding box
+  Vec3D center = {(min[0] + max[0]) / 2.0, (min[1] + max[1]) / 2.0,
+                  (min[2] + max[2]) / 2.0};
+
+  // Compute longest side length
   double scale = std::max({max[0] - min[0], max[1] - min[1], max[2] - min[2]});
+
+  // Normalize: center and scale to fit in [-1, 1] along the longest axis
   for (auto &v : vertices) {
-    v = (v - center) / scale;
+    v = (v - center) * 2 / scale;
   }
   for (auto &p : points) {
-    p = (p - center) / scale;
+    p = (p - center) * 2 / scale;
   }
 }
 

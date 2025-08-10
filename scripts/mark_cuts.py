@@ -11,6 +11,7 @@ from model.model import ACDModel
 import lib_neural_acd
 import argparse
 from utils.misc import *
+from utils.visualization import save_rotating_pcd_gif
 
 def normalize_points(pcd):
     points = np.asarray(pcd.points)
@@ -106,8 +107,14 @@ def mark_cuts(points, checkpoint, config, no_threshold=False):
 
         if len(np.flatnonzero(distances[i])) > config.general.cut_point_limit:
             # Keep only the top cut points based on distances
-            top_indices = np.argpartition(distances[i], -config.general.cut_point_limit)[-config.general.cut_point_limit:]
-            distances[i][top_indices] = 1
+            # selected = np.argpartition(distances[i], -config.general.cut_point_limit)[-config.general.cut_point_limit:]
+
+            nonzero_indices = np.flatnonzero(distances[i])
+
+            selected = np.random.choice(nonzero_indices, size=config.general.cut_point_limit, replace=False)
+
+
+            distances[i][selected] = 1
             distances[i][distances[i] < 1] = 0
         else:
             # If fewer than cut_point_limit points, set all to 1
@@ -135,7 +142,7 @@ if __name__ == "__main__":
         structure = trimesh.load(args.path, force='mesh')
         structure = get_lib_mesh(structure)
         normalize_mesh(structure)
-        lib_neural_acd.preprocess(structure, 50.0, 0.05)
+        lib_neural_acd.preprocess(structure, 50.0, 0.55)
 
         points = lib_neural_acd.VecArray3d()
         point_tris = lib_neural_acd.VecInt()
@@ -149,7 +156,16 @@ if __name__ == "__main__":
         tmesh = trimesh.Trimesh(vertices=np.asarray(structure.vertices), faces=np.asarray(structure.triangles))
         curvature = trimesh.curvature.discrete_gaussian_curvature_measure(tmesh, points, radius=0.02)
         normals = tmesh.face_normals[np.asarray(point_tris)]
+
+        d = curvature.copy()
+        d[d >= -0.0] = 0
+        d[d < -0.0] = 1
+        show_pcd(points, d)
+        exit()
+
+
         points = np.hstack((points, curvature[:, np.newaxis],normals))
+
     else:
         it = ACDgen(config,output_meshes=False).__iter__()
         if args.seed is not None:
@@ -169,5 +185,5 @@ if __name__ == "__main__":
     # mesh.show()
 
     show_pcd(points, distances)
-
+    # save_rotating_pcd_gif(points, distances, gif_path="pcd_rotation.gif", frames=36)
 

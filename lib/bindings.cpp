@@ -1,7 +1,9 @@
 #include <clip.hpp>
 #include <config.hpp>
 #include <core.hpp>
+#include <cost.hpp>
 #include <generate.hpp>
+#include <iostream>
 #include <jlinkage.hpp>
 #include <preprocess.hpp>
 #include <process.hpp>
@@ -120,4 +122,12 @@ PYBIND11_MODULE(lib_neural_acd, m) {
         return result;
       },
       py::arg("points"));
+
+  m.def(
+      "test",
+      [](neural_acd::Mesh m1, neural_acd::Mesh m2) {
+        double h1 = neural_acd::compute_h(m1, m2, 0.03, 3000, 42);
+        std::cout << "h1: " << h1 << std::endl;
+      },
+      py::arg("mesh1"), py::arg("mesh2"));
 }

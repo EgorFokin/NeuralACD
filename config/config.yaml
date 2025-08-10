@@ -3,8 +3,8 @@ version: v1.0
 
 general:
   num_points: 20000
-  cut_point_threshold: 0.7
-  cut_point_limit: 1000
+  cut_point_threshold: 0.8
+  cut_point_limit: 5000
 
 model:
   batch_size: 3
@@ -14,10 +14,10 @@ model:
 
 generation:
   min_parts: 3
-  max_parts: 5
+  max_parts: 3
   random_rotation: true
   random_scale: true
-  gaussian_filter: true
+  gaussian_filter: false
   normalize_mesh: true
 
 lib:
@@ -33,16 +33,16 @@ lib:
   pcd_res: 3000
   remesh:
     resolution: 50
-    threshold: 0.01
+    threshold: 0.1
 
   cost_rv_k: 0.03
-  merge_threshold: 0.05
-  refinement_iterations: 10
+  merge_threshold: 0.07
+  refinement_iterations: 20
 
   return_parts: false
 
   jlinkage:
     sigma: 0.5
-    num_samples: 10000
-    threshold: 0.04
+    num_samples: 20000
+    threshold: 0.05
     outlier_threshold: 10
