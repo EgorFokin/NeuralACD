@@ -103,6 +103,8 @@ if __name__ == "__main__":
     parser.add_argument("--config", type=str, default="config/config.yaml", help="Path to the configuration file.")
     parser.add_argument("--no-threshold", action="store_true", help="Do not apply thresholding to cut points.")
     parser.add_argument("--path", type=str, default="", help="Path to the mesh file.")
+    parser.add_argument("--clusters", action="store_true", help="Visualize clusters")
+    parser.add_argument("--gif", action="store_true", help="Save a rotating GIF of the point cloud.")
     
     args = parser.parse_args()
     
@@ -127,11 +129,12 @@ if __name__ == "__main__":
 
     lib_points = lib_neural_acd.VecArray3d(points[distances==1][:,:3].tolist())
 
-    clusters = lib_neural_acd.dbscan(lib_points, config.lib.dbscan.eps, config.lib.dbscan.min_pts)
+    clusters = None
 
-    # mesh = trimesh.Trimesh(vertices=structure.vertices, faces=structure.triangles)
-    # mesh.show()
+    if args.clusters:
+        clusters = lib_neural_acd.dbscan(lib_points, config.lib.dbscan.eps, config.lib.dbscan.min_pts)
 
-    show_pcd(points, distances,clusters=clusters)
-    # save_rotating_pcd_gif(points, distances, gif_path="pcd_rotation.gif", frames=36)
-
+    if args.gif:
+        save_rotating_pcd_gif(points, distances, gif_path="pcd_rotation.gif", frames=36)
+    else:
+        show_pcd(points, distances,clusters=clusters)

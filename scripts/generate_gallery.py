@@ -45,8 +45,8 @@ def stats_table_html(stats, method):
     num  = s.get("num_parts", "")
     return f"""
     <table style="border-collapse:collapse; font-size:12px; margin:auto; margin-top:4px;">
-      <tr><th style="border:1px solid #2a2a2a; padding:2px 6px;">concavity</th>
-          <th style="border:1px solid #2a2a2a; padding:2px 6px;">num_parts</th></tr>
+      <tr><th style="border:1px solid #2a2a2a; padding:2px 6px;">Concav</th>
+          <th style="border:1px solid #2a2a2a; padding:2px 6px;">NParts</th></tr>
       <tr><td style="border:1px solid #2a2a2a; padding:2px 6px;">{conc}</td>
           <td style="border:1px solid #2a2a2a; padding:2px 6px;">{num}</td></tr>
     </table>
@@ -75,7 +75,7 @@ table.gallery th { background:#171717; font-weight:600; }
 <tr>
   <th>Name</th>
   <th>Original</th>
-  <th>Prediction</th>
+  <th>CutProb</th>
   <th>NeuralACD</th>
   <th>CoACD</th>
 </tr>

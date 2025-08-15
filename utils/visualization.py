@@ -8,6 +8,7 @@ import trimesh
 from PIL import Image
 import seaborn as sns
 
+
 os.environ["QT_QPA_PLATFORM"] = "xcb"
 
 xR = trimesh.transformations.rotation_matrix(np.radians(20), [1, 0, 0])
@@ -77,18 +78,10 @@ def show_pcd(points, values,clusters=None):
         for cluster in clusters:
             cluster_color = np.random.rand(3)
             colors[cluster] = cluster_color
-            print(len(colors))
         
         trimesh.points.PointCloud(colored, colors=colors).show()
         
         
-        
-
-
-
-    
-
-
 def render_pcd(points, values, file):
     """
     Renders a point cloud with colors based on values and saves it to a file.
