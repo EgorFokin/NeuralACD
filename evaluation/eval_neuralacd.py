@@ -47,7 +47,7 @@ def evaluate(checkpoint, config, num_samples, num_workers=1, is_vhacd=False):
         dataset = VHACD(config)
         num_samples = len(dataset)
         for i in range(len(dataset)):
-            p, st = dataset[i]
+            p, st, _ = dataset[i]
             points.append(p)
             structures.append([np.asarray(st.vertices), np.asarray(st.triangles)])
         

@@ -28,7 +28,6 @@ class VHACD(Dataset):
 
     def __getitem__(self, idx):
         path = self.paths[idx]
-        print(path)
         mesh = trimesh.load(path, force='mesh')
         mesh = get_lib_mesh(mesh)
         normalize_mesh(mesh)
@@ -50,7 +49,7 @@ class VHACD(Dataset):
 
 
 
-        return points, mesh
+        return points, mesh, os.path.splitext(os.path.basename(path))[0]
 
 
 

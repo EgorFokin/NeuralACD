@@ -17,6 +17,10 @@ public:
 
   double merge_threshold;
 
+  double dbscan_eps;
+  int dbscan_min_pts;
+  int dbscan_outlier_threshold;
+
   double jlinkage_sigma;
   int jlinkage_num_samples;
   double jlinkage_threshold;
@@ -41,6 +45,10 @@ public:
     cost_rv_k = 0.03;
 
     merge_threshold = 0.005;
+
+    dbscan_eps = 0.07;
+    dbscan_min_pts = 10;
+    dbscan_outlier_threshold = 20;
 
     jlinkage_sigma = 1.0;
     jlinkage_num_samples = 10000;

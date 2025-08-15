@@ -2,6 +2,7 @@
 #include <config.hpp>
 #include <core.hpp>
 #include <cost.hpp>
+#include <dbscan.hpp>
 #include <generate.hpp>
 #include <iostream>
 #include <jlinkage.hpp>
@@ -60,6 +61,10 @@ PYBIND11_MODULE(lib_neural_acd, m) {
       .def_readwrite("remesh_threshold", &neural_acd::Config::remesh_threshold)
       .def_readwrite("cost_rv_k", &neural_acd::Config::cost_rv_k)
       .def_readwrite("merge_threshold", &neural_acd::Config::merge_threshold)
+      .def_readwrite("dbscan_eps", &neural_acd::Config::dbscan_eps)
+      .def_readwrite("dbscan_min_pts", &neural_acd::Config::dbscan_min_pts)
+      .def_readwrite("dbscan_outlier_threshold",
+                     &neural_acd::Config::dbscan_outlier_threshold)
       .def_readwrite("jlinkage_sigma", &neural_acd::Config::jlinkage_sigma)
       .def_readwrite("jlinkage_num_samples",
                      &neural_acd::Config::jlinkage_num_samples)
@@ -108,13 +113,8 @@ PYBIND11_MODULE(lib_neural_acd, m) {
   m.def(
       "get_best_planes",
       [](std::vector<neural_acd::Vec3D> cut_points) {
-        neural_acd::JLinkage jlinkage(
-            neural_acd::config.jlinkage_sigma,
-            neural_acd::config.jlinkage_num_samples,
-            neural_acd::config.jlinkage_threshold,
-            neural_acd::config.jlinkage_outlier_threshold);
-        jlinkage.set_points(cut_points);
-        std::vector<neural_acd::Plane> planes = jlinkage.get_best_planes();
+        std::vector<neural_acd::Plane> planes =
+            neural_acd::get_best_planes(cut_points);
         std::vector<std::array<double, 4>> result;
         for (const auto &plane : planes) {
           result.push_back({plane.a, plane.b, plane.c, plane.d});
@@ -122,6 +122,12 @@ PYBIND11_MODULE(lib_neural_acd, m) {
         return result;
       },
       py::arg("points"));
+  m.def(
+      "dbscan",
+      [](const std::vector<neural_acd::Vec3D> &data, double eps, int min_pts) {
+        return neural_acd::dbscan(data, eps, min_pts);
+      },
+      py::arg("data"), py::arg("eps"), py::arg("min_pts"));
 
   m.def(
       "test",

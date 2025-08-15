@@ -5,6 +5,7 @@ test/
 log/
 checkpoints/
 logs/
+out/
 /*.obj
 /*.glb
 *.mtl

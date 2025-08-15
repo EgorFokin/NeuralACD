@@ -57,10 +57,10 @@ def visualize(planes,points, distances):
     scene = trimesh.Scene()
     i = 0
     for plane in planes:
-        if i in [1,0]:
-            trimesh_plane = get_trimesh_plane(plane[0], plane[1], plane[2], plane[3],[255, 0, 0, 100])
-        else:
-            trimesh_plane = get_trimesh_plane(plane[0], plane[1], plane[2], plane[3],[0, 255, 0, 100])
+        # if i in [1,0]:
+        trimesh_plane = get_trimesh_plane(plane[0], plane[1], plane[2], plane[3],[255, 0, 0, 100])
+        # else:
+        #     trimesh_plane = get_trimesh_plane(plane[0], plane[1], plane[2], plane[3],[0, 255, 0, 100])
         print(plane[0], plane[1], plane[2], plane[3])
         scene.add_geometry(trimesh_plane)
 

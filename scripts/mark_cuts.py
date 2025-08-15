@@ -11,7 +11,7 @@ from model.model import ACDModel
 import lib_neural_acd
 import argparse
 from utils.misc import *
-from utils.visualization import save_rotating_pcd_gif
+from utils.visualization import save_rotating_pcd_gif, show_pcd
 
 def normalize_points(pcd):
     points = np.asarray(pcd.points)
@@ -28,40 +28,26 @@ def load_model(checkpoint):
     model.eval()
     return model.cuda()
 
-def show_pcd(points, distances):
-    distances = np.asarray(distances, dtype=np.float32)
-    points = points[:, :3]
-    norm = plt.Normalize(vmin=np.min(distances), vmax=np.max(distances))
-    base_colors = plt.get_cmap("jet")(norm(distances))[:, :3]
+def threshold_values(values, config):
+    for i in range(len(values)):
+        values[i][values[i] < config.general.cut_point_threshold] = 0
 
-    # Blend positive distances with orange
-    orange = np.array([1.0, 0.5, 0.0])
-    brightness = np.clip(distances, 0, 1)[:, None]
-    colors = base_colors * (1 - 0.5 * brightness) + orange * (0.5 * brightness)
+        if len(np.flatnonzero(values[i])) > config.general.cut_point_limit:
+            # Keep only the top cut points based on distances
+            # selected = np.argpartition(distances[i], -config.general.cut_point_limit)[-config.general.cut_point_limit:]
 
-    # Set alpha based on distance
-    alpha = np.where(distances > 0, 1, 0.5)[:, None]
-    rgba = np.hstack([colors, alpha])
+            nonzero_indices = np.flatnonzero(values[i])
 
-    trimesh.points.PointCloud(points, colors=np.clip(rgba, 0, 1)).show()
+            selected = np.random.choice(nonzero_indices, size=config.general.cut_point_limit, replace=False)
 
 
-def get_curvature(mesh, points, radius):
-    vertices = np.asarray(mesh.vertices)
-    triangles = np.asarray(mesh.triangles)
+            values[i][selected] = 1
+            values[i][values[i] < 1] = 0
+        else:
+            # If fewer than cut_point_limit points, set all to 1
+            values[i][values[i] > 0] = 1
 
-    # for _ in range(5):
-    #     vertices,triangles =  trimesh.remesh.subdivide(vertices, triangles)
-
-    tmesh = trimesh.Trimesh(vertices=vertices, faces=triangles)
-
-    # tmesh.show()
-    curvature = trimesh.curvature.discrete_gaussian_curvature_measure(tmesh, points, radius)
-
-    curvature[curvature >= -0.1] = 0
-    curvature[curvature < -0.1] = 1
-    return curvature
-
+    return values
 
 def mark_cuts(points, checkpoint, config, no_threshold=False):
 
@@ -82,7 +68,7 @@ def mark_cuts(points, checkpoint, config, no_threshold=False):
 
     with torch.no_grad():
 
-        distances = []
+        values = []
 
         for start in range(0, points.shape[0], config.model.batch_size):
             end = min(start + config.model.batch_size, points.shape[0])
@@ -90,40 +76,24 @@ def mark_cuts(points, checkpoint, config, no_threshold=False):
     
             pred = model(batch_points, apply_sigmoid=True)
 
-            distances.append(pred)
-        distances = torch.cat(distances, dim=0)
+            values.append(pred)
+        values = torch.cat(values, dim=0)
 
         
 
-        distances = distances.cpu().numpy()
+        values = values.cpu().numpy()
 
     if no_threshold:
         if not batched:
-            distances = distances.squeeze(0)
-        return distances
+            values = values.squeeze(0)
+        return values
 
-    for i in range(len(distances)):
-        distances[i][distances[i] < config.general.cut_point_threshold] = 0
-
-        if len(np.flatnonzero(distances[i])) > config.general.cut_point_limit:
-            # Keep only the top cut points based on distances
-            # selected = np.argpartition(distances[i], -config.general.cut_point_limit)[-config.general.cut_point_limit:]
-
-            nonzero_indices = np.flatnonzero(distances[i])
-
-            selected = np.random.choice(nonzero_indices, size=config.general.cut_point_limit, replace=False)
-
-
-            distances[i][selected] = 1
-            distances[i][distances[i] < 1] = 0
-        else:
-            # If fewer than cut_point_limit points, set all to 1
-            distances[i][distances[i] > 0] = 1
+    values = threshold_values(values, config)
 
     if not batched:
-        distances = distances.squeeze(0)
+        values = values.squeeze(0)
 
-    return distances
+    return values
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Mark cuts in point cloud using ACD model.")
@@ -139,51 +109,29 @@ if __name__ == "__main__":
     config = load_config(args.config)
 
     if args.path:
-        structure = trimesh.load(args.path, force='mesh')
-        structure = get_lib_mesh(structure)
-        normalize_mesh(structure)
-        lib_neural_acd.preprocess(structure, 50.0, 0.55)
-
-        points = lib_neural_acd.VecArray3d()
-        point_tris = lib_neural_acd.VecInt()
-        structure.extract_point_set(points, point_tris, config.general.num_points)
-
-        
-
-        points = np.asarray(points)
-
-
-        tmesh = trimesh.Trimesh(vertices=np.asarray(structure.vertices), faces=np.asarray(structure.triangles))
-        curvature = trimesh.curvature.discrete_gaussian_curvature_measure(tmesh, points, radius=0.02)
-        normals = tmesh.face_normals[np.asarray(point_tris)]
-
-        d = curvature.copy()
-        d[d >= -0.0] = 0
-        d[d < -0.0] = 1
-        show_pcd(points, d)
-        exit()
-
-
-        points = np.hstack((points, curvature[:, np.newaxis],normals))
+        mesh = trimesh.load(args.path, force='mesh')
+        structure, points = load_mesh(mesh,config)
 
     else:
         it = ACDgen(config,output_meshes=False).__iter__()
         if args.seed is not None:
             set_seed(args.seed)
-        points, distances_t = next(it)    
+        points, values_gt = next(it)    
 
         
 
-
-    # print(distances_t)
     if args.gt:
-        distances = distances_t
+        distances = values_gt
     else:
-        distances = mark_cuts(points, args.checkpoint, config, args.no_threshold )
+        distances = mark_cuts(points, args.checkpoint, config, args.no_threshold)
+
+    lib_points = lib_neural_acd.VecArray3d(points[distances==1][:,:3].tolist())
+
+    clusters = lib_neural_acd.dbscan(lib_points, config.lib.dbscan.eps, config.lib.dbscan.min_pts)
 
     # mesh = trimesh.Trimesh(vertices=structure.vertices, faces=structure.triangles)
     # mesh.show()
 
-    show_pcd(points, distances)
+    show_pcd(points, distances,clusters=clusters)
     # save_rotating_pcd_gif(points, distances, gif_path="pcd_rotation.gif", frames=36)
 

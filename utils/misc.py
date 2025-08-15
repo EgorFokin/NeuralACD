@@ -7,6 +7,7 @@ import lib_neural_acd
 import numpy as np
 import open3d as o3d
 import pytorch_lightning as pl
+import trimesh
 
 def set_seed(seed):
     np.random.seed(seed)
@@ -32,6 +33,25 @@ def normalize_mesh(mesh):
     struct_vertices = (verts - min_vals) / scale
     mesh.vertices = lib_neural_acd.VecArray3d(struct_vertices)
 
+def load_mesh(mesh, config):
+    lib_mesh = get_lib_mesh(mesh)
+    normalize_mesh(lib_mesh)
+    lib_neural_acd.preprocess(lib_mesh, 50.0, 0.55)
+
+    points = lib_neural_acd.VecArray3d()
+    point_tris = lib_neural_acd.VecInt()
+    lib_mesh.extract_point_set(points, point_tris, config.general.num_points)
+
+    points = np.asarray(points)
+
+    mesh = trimesh.Trimesh(vertices=np.asarray(lib_mesh.vertices), faces=np.asarray(lib_mesh.triangles))
+    curvature = trimesh.curvature.discrete_gaussian_curvature_measure(mesh, points, radius=0.02)
+    normals = mesh.face_normals[np.asarray(point_tris)]
+
+    points = np.hstack((points, curvature[:, np.newaxis], normals))
+    return lib_mesh, points
+
+
 
 def load_lib_config(config):
     lib_config = lib_neural_acd.config
@@ -50,6 +70,10 @@ def load_lib_config(config):
     lib_config.cost_rv_k = config.lib.cost_rv_k
 
     lib_config.merge_threshold = config.lib.merge_threshold
+
+    lib_config.dbscan_eps = config.lib.dbscan.eps
+    lib_config.dbscan_min_pts = config.lib.dbscan.min_pts
+    lib_config.dbscan_outlier_threshold = config.lib.dbscan.outlier_threshold
 
     lib_config.jlinkage_sigma = config.lib.jlinkage.sigma
     lib_config.jlinkage_num_samples = config.lib.jlinkage.num_samples

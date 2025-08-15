@@ -35,7 +35,7 @@ if __name__ == "__main__":
         dataset = VHACD(config)
         NUM_SAMPLES = len(dataset)
         for i in range(len(dataset)):
-            p, st = dataset[i]
+            p, st, _ = dataset[i]
             mesh = coacd.Mesh(np.asarray(st.vertices), np.asarray(st.triangles))
             result = coacd.run_coacd(mesh,threshold=args.threshold)
 

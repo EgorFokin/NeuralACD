@@ -33,6 +33,8 @@ if __name__ == "__main__":
 
     config = load_config(args.config)
 
+    print("Current device name:", torch.cuda.get_device_name(torch.cuda.current_device()))
+
 
     dataset = ACDgen(config)
 

@@ -3,8 +3,8 @@ version: v1.0
 
 general:
   num_points: 20000
-  cut_point_threshold: 0.8
-  cut_point_limit: 5000
+  cut_point_threshold: 0.6
+  cut_point_limit: 1000
 
 model:
   batch_size: 3
@@ -13,7 +13,8 @@ model:
   num_workers: 8
 
 generation:
-  min_parts: 3
+  struct_types: ["cuboid"]
+  min_parts: 2
   max_parts: 3
   random_rotation: true
   random_scale: true
@@ -36,13 +37,18 @@ lib:
     threshold: 0.1
 
   cost_rv_k: 0.03
-  merge_threshold: 0.07
+  merge_threshold: 0.05
   refinement_iterations: 20
 
   return_parts: false
+
+  dbscan:
+    eps: 0.07
+    min_pts: 10
+    outlier_threshold: 70
 
   jlinkage:
     sigma: 0.5
     num_samples: 20000
     threshold: 0.05
-    outlier_threshold: 10
+    outlier_threshold: 20

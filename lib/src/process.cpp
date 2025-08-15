@@ -3,6 +3,7 @@
 #include <config.hpp>
 #include <core.hpp>
 #include <cost.hpp>
+#include <dbscan.hpp>
 #include <fstream>
 #include <iostream>
 #include <jlinkage.hpp>
@@ -334,25 +335,41 @@ void write_stats(std::string stats_file, double concavity, int n_parts) {
   f.close();
 }
 
+vector<Plane> get_best_planes(vector<Vec3D> cut_points) {
+  vector<vector<size_t>> clusters =
+      dbscan(cut_points, config.dbscan_eps, config.dbscan_min_pts);
+
+  vector<Plane> planes;
+  JLinkage jlinkage(config.jlinkage_sigma, config.jlinkage_num_samples,
+                    config.jlinkage_threshold,
+                    config.jlinkage_outlier_threshold);
+
+  for (const auto &cluster : clusters) {
+    if (cluster.size() < config.dbscan_outlier_threshold)
+      continue; // skip small clusters
+    vector<Vec3D> cluster_points;
+    for (size_t idx : cluster) {
+      cluster_points.push_back(cut_points[idx]);
+    }
+    jlinkage.set_points(cluster_points);
+    vector<Plane> cluster_planes = jlinkage.get_best_planes();
+    planes.insert(planes.end(), cluster_planes.begin(), cluster_planes.end());
+  }
+  return planes;
+}
+
 MeshList process(Mesh mesh, vector<Vec3D> cut_points, std::string stats_file) {
   // cout << cut_points.size() << " cut points provided." << endl;
 
   mesh.normalize(cut_points); // normalize the mesh and cut points
 
-  MeshList parts;
   vector<Plane> planes;
   if (cut_points.size() >= 3) {
 
-    JLinkage jlinkage(config.jlinkage_sigma, config.jlinkage_num_samples,
-                      config.jlinkage_threshold,
-                      config.jlinkage_outlier_threshold);
-    jlinkage.set_points(cut_points);
-    planes = jlinkage.get_best_planes();
-    // for (auto &plane : planes) {
-    //   cout << "Plane: " << plane.a << " " << plane.b << " " << plane.c << " "
-    //        << plane.d << endl;
-    // }
+    planes = get_best_planes(cut_points);
   }
+
+  MeshList parts;
   double h;
   MeshList cvxs;
   if (planes.empty()) {
