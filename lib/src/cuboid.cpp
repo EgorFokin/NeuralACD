@@ -123,7 +123,7 @@ bool check_aabb_collision(Cuboid &part, const Vec3D &vert, double eps) {
 }
 
 // precondition: part collides with this cuboid
-void Cuboid::compute_cut_quads(Cuboid &part, double eps) {
+void Cuboid::compute_cut_quads(Cuboid &part, bool add_cut_verts, double eps) {
   Vec3D v1, v2, v3, v4;
   bool skip_d1_mn = 0, skip_d2_mn = 0, skip_d1_mx = 0, skip_d2_mx = 0;
   bool found = false;
@@ -196,41 +196,43 @@ void Cuboid::compute_cut_quads(Cuboid &part, double eps) {
                                v4}; // order is important for cut_verts
   cut_quads.push_back(quad);
 
-  std::vector<Vec3D> new_vertices;
-  if (!skip_d2_mn)
-    subdivide_edge(v1, v2, new_vertices, 4);
-  if (!skip_d1_mx)
-    subdivide_edge(v2, v3, new_vertices, 4);
-  if (!skip_d2_mx)
-    subdivide_edge(v3, v4, new_vertices, 4);
-  if (!skip_d1_mn)
-    subdivide_edge(v4, v1, new_vertices, 4);
+  if (!add_cut_verts)
+    return; // no need to add cut vertices
 
-  for (const auto &new_vertex : new_vertices) {
-    cut_verts.push_back(new_vertex);
-  }
+  cut_verts.push_back(std::vector<Vec3D>()); // create a new cut_verts entry
+
+  if (!skip_d2_mn)
+    subdivide_edge(v1, v2, cut_verts[cut_verts.size() - 1], 4);
+  if (!skip_d1_mx)
+    subdivide_edge(v2, v3, cut_verts[cut_verts.size() - 1], 4);
+  if (!skip_d2_mx)
+    subdivide_edge(v3, v4, cut_verts[cut_verts.size() - 1], 4);
+  if (!skip_d1_mn)
+    subdivide_edge(v4, v1, cut_verts[cut_verts.size() - 1], 4);
 }
 
 void Cuboid::filter_cut_verts(std::vector<Cuboid> &parts, double eps) {
-  for (int i = cut_verts.size() - 1; i >= 0; --i) {
-    const auto &vert = cut_verts[i];
-    int found = 0; // Number of parts that are adjacent to this vertex
-    for (auto &part : parts) {
-      if (&part == this)
-        continue; // Skip self
-      if (!check_aabb_collision(part, vert, -1e-6))
-        continue;
-      if (std::abs(part.max[0] - vert[0]) < eps ||
-          std::abs(part.min[0] - vert[0]) < eps ||
-          std::abs(part.max[1] - vert[1]) < eps ||
-          std::abs(part.min[1] - vert[1]) < eps ||
-          std::abs(part.max[2] - vert[2]) < eps ||
-          std::abs(part.min[2] - vert[2]) < eps) {
-        found++;
+  for (auto &cluster : cut_verts) {
+    for (int i = cluster.size() - 1; i >= 0; --i) {
+      const auto &vert = cluster[i];
+      int found = 0; // Number of parts that are adjacent to this vertex
+      for (auto &part : parts) {
+        if (&part == this)
+          continue; // Skip self
+        if (!check_aabb_collision(part, vert, -1e-6))
+          continue;
+        if (std::abs(part.max[0] - vert[0]) < eps ||
+            std::abs(part.min[0] - vert[0]) < eps ||
+            std::abs(part.max[1] - vert[1]) < eps ||
+            std::abs(part.min[1] - vert[1]) < eps ||
+            std::abs(part.max[2] - vert[2]) < eps ||
+            std::abs(part.min[2] - vert[2]) < eps) {
+          found++;
+        }
       }
-    }
-    if (found >= 2) {
-      cut_verts.erase(cut_verts.begin() + i);
+      if (found >= 2) {
+        cluster.erase(cluster.begin() + i);
+      }
     }
   }
 }

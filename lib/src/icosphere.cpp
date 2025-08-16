@@ -64,17 +64,19 @@ void Icosphere::subdivide() {
 }
 
 void Icosphere::filter_cut_verts(std::vector<Icosphere> &parts, double eps) {
-  for (int i = cut_verts.size() - 1; i >= 0; --i) {
-    const auto &vert = cut_verts[i];
-    bool found = false;
-    for (const auto &part : parts) {
-      if (vector_length(part.pos - vert) < part.r - eps) {
-        found = true;
-        break;
+  for (auto &cluster : cut_verts) {
+    for (int i = cluster.size() - 1; i >= 0; --i) {
+      const auto &vert = cluster[i];
+      bool found = false;
+      for (const auto &part : parts) {
+        if (vector_length(part.pos - vert) < part.r - eps) {
+          found = true;
+          break;
+        }
       }
-    }
-    if (found) {
-      cut_verts.erase(cut_verts.begin() + i);
+      if (found) {
+        cluster.erase(cluster.begin() + i);
+      }
     }
   }
 }

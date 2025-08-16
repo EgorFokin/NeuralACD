@@ -5,6 +5,7 @@
 #include <decompose_spheres.hpp>
 #include <generate.hpp>
 #include <icosphere.hpp>
+#include <iostream>
 #include <preprocess.hpp>
 #include <random>
 
@@ -52,8 +53,10 @@ Mesh generate_cuboid_structure(int obj_num) {
     for (int j = 0; j < parts.size(); ++j) {
       if (i == j)
         continue; // Skip self-collision
-      if (check_aabb_collision(parts[i], parts[j], 0))
-        parts[i].compute_cut_quads(parts[j]);
+      if (check_aabb_collision(parts[i], parts[j], 0)) {
+        bool add_cut_verts = (i < j); // avoid duplicates
+        parts[i].compute_cut_quads(parts[j], add_cut_verts);
+      }
     }
   }
 

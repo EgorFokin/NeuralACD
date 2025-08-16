@@ -48,6 +48,10 @@ Icosphere part_after_intersection(Icosphere &old_part, Vec3D &direction,
   new_part.r = old_part.r;
   new_part.cut_verts = old_part.cut_verts;
 
+  if (side) // avoid dublicates
+    new_part.cut_verts.push_back(
+        std::vector<Vec3D>()); // create a new cut_verts entry
+
   for (auto tri : old_part.triangles) {
     Vec3D v1 = old_part.vertices[tri[0]];
     Vec3D v2 = old_part.vertices[tri[1]];
@@ -133,8 +137,9 @@ Icosphere part_after_intersection(Icosphere &old_part, Vec3D &direction,
         new_part.triangles.push_back(
             {(int)base + 2, (int)base + 3, (int)base + 1});
       }
-
-      subdivide_edge(new_v1, new_v2, new_part.cut_verts, 2);
+      if (side)
+        subdivide_edge(new_v1, new_v2,
+                       new_part.cut_verts[new_part.cut_verts.size() - 1], 2);
     } else {
       // One point is in front of the plane, two are behind
       int front_idx, behind1_idx, behind2_idx;
@@ -188,7 +193,9 @@ Icosphere part_after_intersection(Icosphere &old_part, Vec3D &direction,
         new_part.triangles.push_back({(int)base, (int)base + 2, (int)base + 1});
       }
 
-      subdivide_edge(new_v1, new_v2, new_part.cut_verts, 2);
+      if (side)
+        subdivide_edge(new_v1, new_v2,
+                       new_part.cut_verts[new_part.cut_verts.size() - 1], 2);
     }
   }
   return new_part;

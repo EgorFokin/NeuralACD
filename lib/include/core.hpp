@@ -39,7 +39,7 @@ public:
   Vec3D pos;
   std::vector<Vec3D> vertices;
   std::vector<std::array<int, 3>> triangles;
-  std::vector<Vec3D> cut_verts;
+  std::vector<std::vector<Vec3D>> cut_verts;
   Mesh();
   void compute_ch(Mesh &convex) const;
   void compute_vch(Mesh &convex) const;

@@ -47,19 +47,19 @@ class OBJECT_OT_generate_cuboids(bpy.types.Operator):
         mesh_data.from_pydata(mesh.vertices, [], mesh.triangles)
         mesh_data.update()
 
-        cut_verts = list(mesh.cut_verts)
 
         obj = bpy.data.objects.new("Part", mesh_data)
 
         # Link to scene collection
         bpy.context.collection.objects.link(obj)
 
-        # Create a new mesh for cut vertices
-        cut_mesh_data = bpy.data.meshes.new("cut_verts_mesh")
-        cut_mesh_data.from_pydata(cut_verts, [], [])
-        cut_mesh_data.update()
-        cut_obj = bpy.data.objects.new("CutVertsObject", cut_mesh_data)
-        bpy.context.collection.objects.link(cut_obj)
+        for cluster in mesh.cut_verts:
+            # Create a new mesh for cut vertices
+            cut_mesh_data = bpy.data.meshes.new("cut_verts_mesh")
+            cut_mesh_data.from_pydata(cluster, [], [])
+            cut_mesh_data.update()
+            cut_obj = bpy.data.objects.new("CutVertsObject", cut_mesh_data)
+            bpy.context.collection.objects.link(cut_obj)
 
         return {'FINISHED'}
     
@@ -69,7 +69,7 @@ class OBJECT_OT_generate_spheres(bpy.types.Operator):
     bl_description = "Generate a mesh from spheres"
     bl_options = {'REGISTER', 'UNDO'}
 
-    num_cuboids: IntProperty(
+    num_spheres: IntProperty(
         name="Number of spheres",
         default=10,
         min=1,
@@ -82,7 +82,7 @@ class OBJECT_OT_generate_spheres(bpy.types.Operator):
 
     def execute(self, context):
         #Generate cuboid
-        mesh = lib_neural_acd.generate_sphere_structure(self.num_cuboids)
+        mesh = lib_neural_acd.generate_sphere_structure(self.num_spheres)
         if not mesh:
             self.report({'ERROR'}, "Failed to generate cuboids")
             return {'CANCELLED'}
@@ -91,19 +91,20 @@ class OBJECT_OT_generate_spheres(bpy.types.Operator):
         mesh_data.from_pydata(mesh.vertices, [], mesh.triangles)
         mesh_data.update()
 
-        cut_verts = list(mesh.cut_verts)
 
         obj = bpy.data.objects.new("Part", mesh_data)
 
         # Link to scene collection
         bpy.context.collection.objects.link(obj)
         
-        # Create a new mesh for cut vertices
-        cut_mesh_data = bpy.data.meshes.new("cut_verts_mesh")
-        cut_mesh_data.from_pydata(cut_verts, [], [])
-        cut_mesh_data.update()
-        cut_obj = bpy.data.objects.new("CutVertsObject", cut_mesh_data)
-        bpy.context.collection.objects.link(cut_obj)
+
+        for cluster in mesh.cut_verts:
+            # Create a new mesh for cut vertices
+            cut_mesh_data = bpy.data.meshes.new("cut_verts_mesh")
+            cut_mesh_data.from_pydata(list(cluster), [], [])
+            cut_mesh_data.update()
+            cut_obj = bpy.data.objects.new("CutVertsObject", cut_mesh_data)
+            bpy.context.collection.objects.link(cut_obj)
 
         return {'FINISHED'}
     

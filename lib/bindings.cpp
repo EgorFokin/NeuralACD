@@ -17,6 +17,8 @@ namespace py = pybind11;
 PYBIND11_MAKE_OPAQUE(std::vector<std::array<double, 3>>);
 PYBIND11_MAKE_OPAQUE(std::vector<std::array<double, 4>>);
 PYBIND11_MAKE_OPAQUE(std::vector<std::array<int, 3>>);
+PYBIND11_MAKE_OPAQUE(
+    std::vector<std::vector<std::array<double, 3>>>); // cut verts
 PYBIND11_MAKE_OPAQUE(std::vector<double>);
 PYBIND11_MAKE_OPAQUE(std::vector<int>);
 
@@ -26,9 +28,11 @@ PYBIND11_MODULE(lib_neural_acd, m) {
   py::bind_vector<std::vector<std::array<int, 3>>>(
       m, "VecArray3i"); // triangle array
   py::bind_vector<std::vector<std::array<double, 4>>>(
-      m, "VecArray4d");                                 // plane array
-  py::bind_vector<std::vector<double>>(m, "VecDouble"); // cut verts
-  py::bind_vector<std::vector<int>>(m, "VecInt");       // sample triangle ids
+      m, "VecArray4d"); // plane array
+  py::bind_vector<std::vector<double>>(m, "VecDouble");
+  py::bind_vector<std::vector<int>>(m, "VecInt"); // sample triangle ids
+  py::bind_vector<std::vector<std::vector<std::array<double, 3>>>>(
+      m, "VecVecArray3d"); // cut verts
 
   py::class_<neural_acd::Mesh>(m, "Mesh")
       .def_readwrite("vertices", &neural_acd::Mesh::vertices)

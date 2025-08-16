@@ -20,7 +20,8 @@ public:
                      std::array<int, 2> &tris_i);
   void update_side(std::string dir, int dim, double value);
   void filter_cut_verts(std::vector<Cuboid> &parts, double eps = 1e-2);
-  void compute_cut_quads(Cuboid &part, double eps = 1e-6);
+  void compute_cut_quads(Cuboid &part, bool add_cut_verts = true,
+                         double eps = 1e-6);
   void remove_inner_part();
   void cut_face(std::string dir, int dim,
                 std::vector<std::array<Vec3D, 4>> &quads);
